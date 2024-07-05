@@ -25,7 +25,8 @@ impl SearchHelpers {
     }
 
     pub fn get_explore_scaling(params: &MctsParams, parent: &Edge) -> f32 {
-        (params.expl_tau() * (parent.visits().max(1) as f32).ln()).exp()
+        let total_visits = parent.visits().max(1) as f32;
+        (params.expl_tau() * (total_visits.powf(0.95) as f32).ln()).exp()
     }
 
     pub fn get_fpu(parent: &Edge) -> f32 {

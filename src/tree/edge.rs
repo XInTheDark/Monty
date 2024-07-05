@@ -54,7 +54,7 @@ impl Edge {
     }
 
     pub fn q(&self) -> f32 {
-        self.wins / self.visits as f32
+        (self.wins / self.visits as f32) + (self.wins / 10000.0 + 1.0).ln().min(1.0)
     }
 
     pub fn var(&self) -> f32 {

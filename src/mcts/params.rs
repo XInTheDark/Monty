@@ -107,5 +107,5 @@ make_mcts_params! {
     cpuct_var_weight: f32 = 0.851, 0.0, 2.0, 0.085, 0.002;
     cpuct_var_scale: f32 = 0.257, 0.0, 2.0, 0.02, 0.002;
     cpuct_visits_scale: f32 = 37.3, 1.0, 512.0, 3.2, 0.002;
-    expl_tau: f32 = 0.57, 0.1, 1.0, 0.05, 0.002;
+    expl_tau: f32 = 0.524, 0.1, 1.0, 0.05, 0.002;
 }

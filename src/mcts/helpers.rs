@@ -21,6 +21,9 @@ impl SearchHelpers {
             cpuct *= 1.0 + params.cpuct_var_weight() * (frac - 1.0);
         }
 
+        // scale CPUCT with number of wins
+        cpuct *= (parent.wins() / 1000.0 + 2.2).ln().min(2.0);
+
         cpuct
     }
 

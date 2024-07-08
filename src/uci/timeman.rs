@@ -1,5 +1,5 @@
 pub fn get_time(time: u64, increment: Option<i32>, ply: u16, movestogo: u64) -> u128 {
-    let max_time;
+    let mut max_time;
     let inc;
     if let Some(i) = increment {
         inc = i as u64;
@@ -19,13 +19,15 @@ pub fn get_time(time: u64, increment: Option<i32>, ply: u16, movestogo: u64) -> 
 
     if movestogo == 0 {
         let log_time = (time_left / 1000.0).log10();
-        let opt_constant = (0.00308 + 0.000319 * log_time).min(0.00506);
-        let opt_scale = (0.0122 + (ply as f64 + 2.5).sqrt() * opt_constant).min(0.213 * time as f64 / time_left);
+        let opt_constant = (0.0040 + 0.00032 * log_time).min(0.00506);
+        let opt_scale = (0.0125 + (ply as f64 + 2.5).sqrt() * opt_constant).min(0.213 * time as f64 / time_left);
         max_time = (opt_scale * time_left) as u128;
     }
     else {
         max_time = (time / mtg) as u128;
     }
+
+    max_time = max_time.min((time * 850 / 1000) as u128);
 
     max_time
 }

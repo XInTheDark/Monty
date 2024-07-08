@@ -286,7 +286,7 @@ fn go(
 
     // `go wtime <wtime> btime <btime> winc <winc> binc <binc>``
     if let Some(t) = times[pos.tm_stm()] {
-        time = Some(get_time(t, incs[pos.tm_stm()], movestogo));
+        time = Some(get_time(t, incs[pos.tm_stm()], pos.ply(), movestogo));
     }
 
     // `go movetime <time>`

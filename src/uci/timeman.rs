@@ -19,9 +19,11 @@ pub fn get_time(time: u64, increment: Option<i32>, ply: u16, movestogo: u64) -> 
 
     if movestogo == 0 {
         let log_time = (time_left / 1000.0).log10();
-        let opt_constant = (0.0040 + 0.00032 * log_time).min(0.00506);
-        let opt_scale = (0.0125 + (ply as f64 + 2.5).sqrt() * opt_constant).min(0.213 * time as f64 / time_left);
-        max_time = (opt_scale * time_left) as u128;
+        let opt_constant = (0.0048 + 0.00032 * log_time).min(0.0060);
+        let opt_scale = (0.0125 + (ply as f64 + 2.5).sqrt() * opt_constant).min(0.25 * time as f64 / time_left);
+        // More time at the start of the game
+        let bonus = if ply <= 10 { 1.0 + (11.0 - ply as f64).log10() * 0.5 } else { 1.0 };
+        max_time = (opt_scale * bonus * time_left) as u128;
     }
     else {
         max_time = (time / mtg) as u128;

@@ -1,3 +1,7 @@
+mod timeman;
+
+use timeman::get_time;
+
 use crate::{
     chess::{ChessState, Move},
     mcts::{Limits, Searcher},
@@ -250,7 +254,7 @@ fn go(
 
     let mut times = [None; 2];
     let mut incs = [None; 2];
-    let mut movestogo = 30;
+    let mut movestogo = 0;
 
     let mut mode = "";
 
@@ -272,7 +276,7 @@ fn go(
                 "btime" => times[1] = Some(cmd.parse().unwrap_or(0)),
                 "winc" => incs[0] = Some(cmd.parse().unwrap_or(0)),
                 "binc" => incs[1] = Some(cmd.parse().unwrap_or(0)),
-                "movestogo" => movestogo = cmd.parse().unwrap_or(30),
+                "movestogo" => movestogo = cmd.parse().unwrap_or(0),
                 _ => mode = "none",
             },
         }
@@ -282,13 +286,7 @@ fn go(
 
     // `go wtime <wtime> btime <btime> winc <winc> binc <binc>``
     if let Some(t) = times[pos.tm_stm()] {
-        let mut base = t / movestogo.max(1);
-
-        if let Some(i) = incs[pos.tm_stm()] {
-            base += i * 3 / 4;
-        }
-
-        time = Some(base);
+        time = Some(get_time(t, incs[pos.tm_stm()], movestogo));
     }
 
     // `go movetime <time>`

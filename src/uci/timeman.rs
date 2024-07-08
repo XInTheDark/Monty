@@ -1,6 +1,6 @@
 pub fn get_time(time: u64, increment: Option<i32>, movestogo: u64) -> u128 {
     println!("time: {}, increment: {:?}, movestogo: {}", time, increment, movestogo);
-    let max_time: u128;
+    let max_time;
     let inc;
     if let Some(i) = increment {
         inc = i as u64;

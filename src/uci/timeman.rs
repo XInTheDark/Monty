@@ -19,8 +19,8 @@ pub fn get_time(time: u64, increment: Option<i32>, movestogo: u64) -> u128 {
 
     if movestogo == 0 {
         let log_time = (time_left / 1000.0).log10();
-        let opt_constant = (0.00308 + 0.000319 * log_time).min(0.00506);
-        let opt_scale = (0.0122 + 3.60 * opt_constant).min(0.213 * time as f64 / time_left);
+        let opt_constant = (0.00330 + 0.000319 * log_time).min(0.00506);
+        let opt_scale = (0.0125 + 4.50 * opt_constant).min(0.213 * time as f64 / time_left);
         max_time = (opt_scale * time_left) as u128;
     }
     else {

@@ -289,6 +289,7 @@ fn go(
             incs[pos.stm()],
             pos.ply(),
             movestogo,
+            MctsParams::default(),
         ));
     }
 

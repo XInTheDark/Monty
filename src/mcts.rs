@@ -134,7 +134,7 @@ impl<'a> Searcher<'a> {
                 if let Some(time) = limits.opt_time {
                     let elapsed = timer.elapsed().as_millis();
 
-                    let best_move_instability = 1.0 + (best_move_changes as f32 + 1.0).ln();
+                    let best_move_instability = (1.0 + (best_move_changes as f32 * 0.3 + 1.0).ln()).clamp(1.0, 3.0);
 
                     let total_time = time * best_move_instability as u128;
                     if elapsed >= total_time {

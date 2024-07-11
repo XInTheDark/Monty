@@ -140,10 +140,6 @@ impl<'a> Searcher<'a> {
                     if elapsed >= total_time {
                         break;
                     }
-                    println!(
-                        "Time: {} ms, Nodes: {}, Depth: {}, Best Move: {}, Eval: {:.2}, Falling Eval: {:.2}, Best Move Instability: {:.2}",
-                        elapsed, nodes, depth, best_move, score, falling_eval, best_move_instability
-                    );
 
                     best_move_changes = 0;
                     previous_score = if previous_score == f32::NEG_INFINITY {

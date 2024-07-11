@@ -131,7 +131,7 @@ impl<'a> Searcher<'a> {
                     } else {
                         previous_score - score
                     };
-                    let falling_eval = (1.0 + eval_diff * 0.05).clamp(0.60, 1.80);
+                    let falling_eval = (1.0 + eval_diff * 0.12).clamp(0.60, 1.80);
 
                     let best_move_instability =
                         (1.0 + (best_move_changes as f32 * 0.3).ln_1p()).clamp(1.0, 3.2);
@@ -140,12 +140,16 @@ impl<'a> Searcher<'a> {
                     if elapsed >= total_time {
                         break;
                     }
+                    println!(
+                        "Time: {} ms, Nodes: {}, Depth: {}, Best Move: {}, Eval: {:.2}, Falling Eval: {:.2}, Best Move Instability: {:.2}",
+                        elapsed, nodes, depth, best_move, score, falling_eval, best_move_instability
+                    );
 
                     best_move_changes = 0;
                     previous_score = if previous_score == f32::NEG_INFINITY {
                         score
                     } else {
-                        (score + previous_score) / 2.0
+                        (score + 2.0 * previous_score) / 3.0
                     };
                 }
             }

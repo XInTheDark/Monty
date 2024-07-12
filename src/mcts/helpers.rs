@@ -50,7 +50,9 @@ impl SearchHelpers {
         if action.visits() == 0 {
             fpu
         } else {
-            action.q()
+            // Evaluation grain
+            let q = action.q();
+            ((q * 10000.0) as i32 / 16 * 16) as f32 / 10000.0
         }
     }
 

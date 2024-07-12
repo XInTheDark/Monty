@@ -52,7 +52,7 @@ impl SearchHelpers {
         } else {
             // Evaluation grain
             let q = action.q();
-            ((q * 10000.0) as i32 / 16 * 16) as f32 / 10000.0
+            ((q * 1000.0) as i32 / 16 * 16) as f32 / 1000.0
         }
     }
 

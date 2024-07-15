@@ -98,7 +98,7 @@ impl<'a> Searcher<'a> {
 
             nodes += 1;
 
-            if nodes % 256 == 0 {
+            if nodes % 128 == 0 {
                 if self.abort.load(Ordering::Relaxed) {
                     break;
                 }
@@ -116,7 +116,7 @@ impl<'a> Searcher<'a> {
                 }
             }
 
-            if nodes % 16384 == 0 {
+            if nodes % 8192 == 0 {
                 // Time management
                 if let Some(time) = limits.opt_time {
                     let elapsed = timer.elapsed().as_millis();

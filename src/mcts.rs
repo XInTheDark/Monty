@@ -216,7 +216,7 @@ impl<'a> Searcher<'a> {
                 self.get_utility(ptr, pos)
             }
         } else if self.prune(*depth, prev_q) {
-            prev_q
+            1.0 - prev_q
         } else {
             // expand node on the second visit
             if self.tree[ptr].is_not_expanded() {

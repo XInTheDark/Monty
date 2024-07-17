@@ -299,11 +299,7 @@ impl<'a> Searcher<'a> {
     }
 
     fn prune(&self, depth: usize, prev_q: f32) -> bool {
-        if depth < 5 || depth <= self.avg_depth {
-            return false;
-        }
-
-        let threshold = (1.015 - 0.005 * (depth as f32)).max(0.75);
+        let threshold = (1.035 - 0.0003 * (depth as f32) * (depth as f32)).max(0.75);
         return prev_q > threshold || prev_q < 1.0 - threshold;
     }
 

@@ -219,7 +219,7 @@ impl<'a> Searcher<'a> {
             }
 
             // select action to take via PUCT
-            let (action, best_q, best_u) = self.pick_action(ptr);
+            let (action, best_q, _) = self.pick_action(ptr);
 
             let edge = self.tree.edge(ptr, action);
             pos.make_move(Move::from(edge.mov()));
@@ -299,11 +299,7 @@ impl<'a> Searcher<'a> {
     }
 
     fn prune(&self, depth: usize, prev_q: f32) -> bool {
-        if depth <= self.avg_depth {
-            return false;
-        }
-        let threshold = (1.0 - 0.008 * self.avg_depth as f32).max(0.75);
-        return prev_q > threshold || prev_q < 1.0 - threshold;
+        depth > 1 && (depth >= self.avg_depth + 8 || (depth >= self.avg_depth + 1 && (prev_q > 0.95 || prev_q < 0.05)))
     }
 
     fn search_report(&self, depth: usize, timer: &Instant, nodes: usize) {

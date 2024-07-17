@@ -200,11 +200,12 @@ impl<'a> Searcher<'a> {
         let hash = self.tree[ptr].hash();
         let parent = self.tree[ptr].parent();
         let action = self.tree[ptr].action();
+        let edge = self.tree.edge(parent, action);
 
         let mut child_state = GameState::Ongoing;
-        let pvisits = self.tree.edge(parent, action).visits();
+        let pvisits = edge.visits();
 
-        let mut u = if self.tree[ptr].is_terminal() || pvisits == 0 || self.prune(*depth, prev_q) {
+        let mut u = if self.tree[ptr].is_terminal() || pvisits == 0 {
             // probe hash table to use in place of network
             if self.tree[ptr].state() == GameState::Ongoing {
                 if let Some(entry) = self.tree.probe_hash(hash) {
@@ -215,6 +216,8 @@ impl<'a> Searcher<'a> {
             } else {
                 self.get_utility(ptr, pos)
             }
+        } else if self.prune(*depth, prev_q) {
+            1.0 - prev_q
         } else {
             // expand node on the second visit
             if self.tree[ptr].is_not_expanded() {

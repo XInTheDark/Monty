@@ -83,7 +83,7 @@ impl<'a> Searcher<'a> {
         loop {
             let mut pos = self.root_position.clone();
             let mut this_depth = 0;
-            self.perform_one_iteration(&mut pos, self.tree.root_node(), &mut this_depth);
+            self.perform_one_iteration(&mut pos, self.tree.root_node(), &mut this_depth, 0.0);
 
             cumulative_depth += this_depth - 1;
 
@@ -181,7 +181,13 @@ impl<'a> Searcher<'a> {
         (Move::from(best_child.mov()), best_child.q())
     }
 
-    fn perform_one_iteration(&mut self, pos: &mut ChessState, ptr: i32, depth: &mut usize) -> f32 {
+    fn perform_one_iteration(
+        &mut self,
+        pos: &mut ChessState,
+        ptr: i32,
+        depth: &mut usize,
+        prev_q: f32,
+    ) -> f32 {
         *depth += 1;
 
         self.tree.make_recently_used(ptr);
@@ -193,7 +199,7 @@ impl<'a> Searcher<'a> {
         let mut child_state = GameState::Ongoing;
         let pvisits = self.tree.edge(parent, action).visits();
 
-        let mut u = if self.tree[ptr].is_terminal() || pvisits == 0 {
+        let mut u = if self.tree[ptr].is_terminal() || pvisits == 0 || self.prune(*depth, prev_q) {
             // probe hash table to use in place of network
             if self.tree[ptr].state() == GameState::Ongoing {
                 if let Some(entry) = self.tree.probe_hash(hash) {
@@ -211,7 +217,7 @@ impl<'a> Searcher<'a> {
             }
 
             // select action to take via PUCT
-            let action = self.pick_action(ptr);
+            let (action, best_q, best_u) = self.pick_action(ptr);
 
             let edge = self.tree.edge(ptr, action);
             pos.make_move(Move::from(edge.mov()));
@@ -225,7 +231,7 @@ impl<'a> Searcher<'a> {
                 self.tree.edge_mut(ptr, action).set_ptr(child_ptr);
             }
 
-            let u = self.perform_one_iteration(pos, child_ptr, depth);
+            let u = self.perform_one_iteration(pos, child_ptr, depth, best_q);
             child_state = self.tree[child_ptr].state();
 
             u
@@ -254,7 +260,7 @@ impl<'a> Searcher<'a> {
         }
     }
 
-    fn pick_action(&self, ptr: i32) -> usize {
+    fn pick_action(&self, ptr: i32) -> (usize, f32, f32) {
         if !self.tree[ptr].has_children() {
             panic!("trying to pick from no children!");
         }
@@ -269,12 +275,34 @@ impl<'a> Searcher<'a> {
 
         let expl = cpuct * expl_scale;
 
-        self.tree.get_best_child_by_key(ptr, |action| {
+        let mut best_child = usize::MAX;
+        let mut best_score = f32::NEG_INFINITY;
+        let mut best_q = f32::NEG_INFINITY;
+        let mut best_u = f32::NEG_INFINITY;
+
+        for (i, action) in self.tree[ptr].actions().iter().enumerate() {
             let q = SearchHelpers::get_action_value(action, fpu);
             let u = expl * action.policy() / (1 + action.visits()) as f32;
 
-            q + u
-        })
+            let score = q + u;
+
+            if score > best_score {
+                best_score = score;
+                best_child = i;
+                best_q = q;
+                best_u = u;
+            }
+        }
+        (best_child, best_q, best_u)
+    }
+
+    fn prune(&self, depth: usize, prev_q: f32) -> bool {
+        if depth < 5 {
+            return false;
+        }
+
+        let threshold = (0.99 - 0.005 * (depth as f32)).max(0.70);
+        return prev_q > threshold || prev_q < 1.0 - threshold;
     }
 
     fn search_report(&self, depth: usize, timer: &Instant, nodes: usize) {

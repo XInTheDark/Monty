@@ -30,8 +30,6 @@ pub struct Searcher<'a> {
     policy: &'a PolicyNetwork,
     value: &'a ValueNetwork,
     abort: &'a AtomicBool,
-    nodes: usize,
-    cumulative_depth: usize,
     avg_depth: usize,
 }
 
@@ -51,8 +49,6 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
-            nodes: 0,
-            cumulative_depth: 0,
             avg_depth: 0,
         }
     }
@@ -77,9 +73,9 @@ impl<'a> Searcher<'a> {
             self.tree[node].expand::<true>(&self.root_position, &self.params, self.policy);
         }
 
+        let mut nodes = 0;
         let mut depth = 0;
-        self.cumulative_depth = 0;
-        self.nodes = 0;
+        let mut cumulative_depth = 0;
 
         let mut best_move = Move::NULL;
         let mut best_move_changes = 0;
@@ -91,20 +87,20 @@ impl<'a> Searcher<'a> {
             let mut this_depth = 0;
             self.perform_one_iteration(&mut pos, self.tree.root_node(), &mut this_depth, 0.0);
 
-            self.cumulative_depth += this_depth - 1;
+            cumulative_depth += this_depth - 1;
 
             // proven checkmate
             if self.tree[self.tree.root_node()].is_terminal() {
                 break;
             }
 
-            if self.nodes >= limits.max_nodes {
+            if nodes >= limits.max_nodes {
                 break;
             }
 
-            self.nodes += 1;
+            nodes += 1;
 
-            if self.nodes % 256 == 0 {
+            if nodes % 256 == 0 {
                 if self.abort.load(Ordering::Relaxed) {
                     break;
                 }
@@ -122,7 +118,7 @@ impl<'a> Searcher<'a> {
                 }
             }
 
-            if self.nodes % 16384 == 0 {
+            if nodes % 16384 == 0 {
                 // Time management
                 if let Some(time) = limits.opt_time {
                     let elapsed = timer.elapsed().as_millis();
@@ -142,7 +138,7 @@ impl<'a> Searcher<'a> {
                         (1.0 + (best_move_changes as f32 * 0.3).ln_1p()).clamp(1.0, 3.2);
 
                     // Use less time if our best move has a large percentage of visits, and vice versa
-                    let nodes_effort = self.get_best_action().visits() as f32 / self.nodes as f32;
+                    let nodes_effort = self.get_best_action().visits() as f32 / nodes as f32;
                     let best_move_visits =
                         (2.5 - ((nodes_effort + 0.3) * 0.55).ln_1p() * 4.0).clamp(0.55, 1.50);
 
@@ -163,7 +159,7 @@ impl<'a> Searcher<'a> {
             }
 
             // define "depth" as the average depth of selection
-            self.avg_depth = self.cumulative_depth / self.nodes;
+            self.avg_depth = cumulative_depth / nodes;
             if self.avg_depth > depth {
                 depth = self.avg_depth;
                 if depth >= limits.max_depth {
@@ -171,15 +167,15 @@ impl<'a> Searcher<'a> {
                 }
 
                 if uci_output {
-                    self.search_report(depth, &timer, self.nodes);
+                    self.search_report(depth, &timer, nodes);
                 }
             }
         }
 
-        *total_nodes += self.nodes;
+        *total_nodes += nodes;
 
         if uci_output {
-            self.search_report(depth.max(1), &timer, self.nodes);
+            self.search_report(depth.max(1), &timer, nodes);
         }
 
         let best_action = self.tree.get_best_child(self.tree.root_node());

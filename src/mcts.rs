@@ -31,6 +31,7 @@ pub struct Searcher<'a> {
     value: &'a ValueNetwork,
     abort: &'a AtomicBool,
     avg_depth: usize,
+    sel_depth: usize,
 }
 
 impl<'a> Searcher<'a> {
@@ -50,6 +51,7 @@ impl<'a> Searcher<'a> {
             value,
             abort,
             avg_depth: 0,
+            sel_depth: 0,
         }
     }
 
@@ -88,6 +90,7 @@ impl<'a> Searcher<'a> {
             self.perform_one_iteration(&mut pos, self.tree.root_node(), &mut this_depth, 0.0);
 
             cumulative_depth += this_depth - 1;
+            self.sel_depth = self.sel_depth.max(this_depth);
 
             // proven checkmate
             if self.tree[self.tree.root_node()].is_terminal() {
@@ -299,11 +302,12 @@ impl<'a> Searcher<'a> {
     }
 
     fn prune(&self, depth: usize, prev_q: f32) -> bool {
-        depth > 1 && (depth >= self.avg_depth + 8 || (depth >= self.avg_depth + 1 && (prev_q > 0.95 || prev_q < 0.05)))
+        depth > 1 && (depth >= self.avg_depth + 8 || (depth >= self.sel_depth && (prev_q > 0.95 || prev_q < 0.05)))
     }
 
     fn search_report(&self, depth: usize, timer: &Instant, nodes: usize) {
         print!("info depth {depth} ");
+        print!("seldepth {} ", self.sel_depth);
         let (pv_line, score) = self.get_pv(depth);
 
         if score > 1.0 {

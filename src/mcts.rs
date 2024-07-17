@@ -302,7 +302,7 @@ impl<'a> Searcher<'a> {
     }
 
     fn prune(&self, depth: usize, prev_q: f32) -> bool {
-        depth > 1 && (depth >= self.avg_depth + 8 || (depth >= self.sel_depth && (prev_q > 0.95 || prev_q < 0.05)))
+        depth > 1 && (depth >= self.sel_depth && (prev_q > 0.95 || prev_q < 0.05))
     }
 
     fn search_report(&self, depth: usize, timer: &Instant, nodes: usize) {

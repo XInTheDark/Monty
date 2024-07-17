@@ -303,7 +303,7 @@ impl<'a> Searcher<'a> {
             return false;
         }
 
-        let threshold = (0.99 - 0.005 * (depth as f32)).max(0.70);
+        let threshold = (1.015 - 0.005 * (depth as f32)).max(0.75);
         return prev_q > threshold || prev_q < 1.0 - threshold;
     }
 

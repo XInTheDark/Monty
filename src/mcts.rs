@@ -213,7 +213,7 @@ impl<'a> Searcher<'a> {
                 self.get_utility(ptr, pos)
             }
         } else if self.prune(*depth, prev_q) {
-            prev_q
+            1.0 - prev_q
         } else {
             // expand node on the second visit
             if self.tree[ptr].is_not_expanded() {
@@ -221,7 +221,7 @@ impl<'a> Searcher<'a> {
             }
 
             // select action to take via PUCT
-            let (action, best_q, best_u) = self.pick_action(ptr);
+            let (action, best_q, _) = self.pick_action(ptr);
 
             let edge = self.tree.edge(ptr, action);
             pos.make_move(Move::from(edge.mov()));

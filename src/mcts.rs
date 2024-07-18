@@ -23,6 +23,11 @@ pub struct Limits {
     pub max_nodes: usize,
 }
 
+#[derive(Clone, Default)]
+struct Stack {
+    in_check: bool,
+}
+
 pub struct Searcher<'a> {
     root_position: ChessState,
     tree: Tree,
@@ -30,6 +35,7 @@ pub struct Searcher<'a> {
     policy: &'a PolicyNetwork,
     value: &'a ValueNetwork,
     abort: &'a AtomicBool,
+    stack: Vec<Stack>,
 }
 
 impl<'a> Searcher<'a> {
@@ -48,6 +54,7 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
+            stack: vec![Stack::default(); 256],
         }
     }
 
@@ -184,11 +191,14 @@ impl<'a> Searcher<'a> {
     fn perform_one_iteration(&mut self, pos: &mut ChessState, ptr: i32, depth: &mut usize) -> f32 {
         *depth += 1;
 
+        // Initialize
         self.tree.make_recently_used(ptr);
 
         let hash = self.tree[ptr].hash();
         let parent = self.tree[ptr].parent();
         let action = self.tree[ptr].action();
+
+        self.stack[*depth].in_check = pos.in_check();
 
         let mut child_state = GameState::Ongoing;
         let pvisits = self.tree.edge(parent, action).visits();
@@ -233,6 +243,7 @@ impl<'a> Searcher<'a> {
 
         // flip perspective of score
         u = 1.0 - u;
+        u = self.adjust_value(u, *depth);
         self.tree.edge_mut(parent, action).update(u);
 
         let edge = self.tree.edge(parent, action);
@@ -252,6 +263,18 @@ impl<'a> Searcher<'a> {
             GameState::Lost(_) => 0.0,
             GameState::Won(_) => 1.0,
         }
+    }
+
+    fn adjust_value(&self, value: f32, depth: usize) -> f32 {
+        let mut checks = 0f32;
+        for i in (0..5).rev() {
+            if self.stack[depth.saturating_sub(i * 2)].in_check {
+                checks += 1.0;
+            }
+        }
+        let check_penalty = if checks <= 1.0 { 0.0 } else { checks * -0.012 };
+
+        value + check_penalty
     }
 
     fn pick_action(&self, ptr: i32) -> usize {

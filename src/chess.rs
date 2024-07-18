@@ -114,6 +114,10 @@ impl ChessState {
         self.stm()
     }
 
+    pub fn in_check(&self) -> bool {
+        self.board.in_check()
+    }
+
     pub fn get_policy_feats(&self) -> (goober::SparseVector, u64) {
         let mut feats = goober::SparseVector::with_capacity(32);
         self.board.map_policy_features(|feat| feats.push(feat));

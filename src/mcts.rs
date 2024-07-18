@@ -242,8 +242,8 @@ impl<'a> Searcher<'a> {
         };
 
         // flip perspective of score
-        u = 1.0 - u;
         u = self.adjust_value(u, *depth);
+        u = 1.0 - u;
         self.tree.edge_mut(parent, action).update(u);
 
         let edge = self.tree.edge(parent, action);

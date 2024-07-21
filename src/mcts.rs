@@ -234,9 +234,9 @@ impl<'a> Searcher<'a> {
         // flip perspective of score
         u = 1.0 - u;
 
-        let adjusted_u = if u < 0.05 {
+        let adjusted_u = if u < 0.1 - *depth as f32 * 0.004 {
             0.0
-        } else if u > 0.95 {
+        } else if u > 0.9 + *depth as f32 * 0.004 {
             1.0
         } else {
             u

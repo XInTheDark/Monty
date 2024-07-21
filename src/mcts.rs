@@ -30,6 +30,7 @@ pub struct Searcher<'a> {
     policy: &'a PolicyNetwork,
     value: &'a ValueNetwork,
     abort: &'a AtomicBool,
+    nodes: usize,
 }
 
 impl<'a> Searcher<'a> {
@@ -48,6 +49,7 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
+            nodes: 0,
         }
     }
 
@@ -81,7 +83,8 @@ impl<'a> Searcher<'a> {
             self.tree[node].add_dirichlet_noise(0.03, 0.25);
         }
 
-        let mut nodes = 0;
+        self.nodes = 0;
+        let mut mcts_nodes = 0;
         let mut depth = 0;
         let mut cumulative_depth = 0;
 
@@ -102,13 +105,12 @@ impl<'a> Searcher<'a> {
                 break;
             }
 
-            if nodes >= limits.max_nodes {
+            if self.nodes >= limits.max_nodes {
                 break;
             }
 
-            nodes += 1;
-
-            if nodes % 256 == 0 {
+            mcts_nodes += 1;
+            if mcts_nodes % 256 == 0 {
                 if self.abort.load(Ordering::Relaxed) {
                     break;
                 }
@@ -126,7 +128,7 @@ impl<'a> Searcher<'a> {
                 }
             }
 
-            if nodes % 16384 == 0 {
+            if mcts_nodes % 16384 == 0 {
                 // Time management
                 if let Some(time) = limits.opt_time {
                     let elapsed = timer.elapsed().as_millis();
@@ -146,7 +148,7 @@ impl<'a> Searcher<'a> {
                         (1.0 + (best_move_changes as f32 * 0.3).ln_1p()).clamp(1.0, 3.2);
 
                     // Use less time if our best move has a large percentage of visits, and vice versa
-                    let nodes_effort = self.get_best_action().visits() as f32 / nodes as f32;
+                    let nodes_effort = self.get_best_action().visits() as f32 / mcts_nodes as f32;
                     let best_move_visits =
                         (2.5 - ((nodes_effort + 0.3) * 0.55).ln_1p() * 4.0).clamp(0.55, 1.50);
 
@@ -167,7 +169,7 @@ impl<'a> Searcher<'a> {
             }
 
             // define "depth" as the average depth of selection
-            let avg_depth = cumulative_depth / nodes;
+            let avg_depth = cumulative_depth / mcts_nodes;
             if avg_depth > depth {
                 depth = avg_depth;
                 if depth >= limits.max_depth {
@@ -175,15 +177,15 @@ impl<'a> Searcher<'a> {
                 }
 
                 if uci_output {
-                    self.search_report(depth, &timer, nodes);
+                    self.search_report(depth, &timer, self.nodes);
                 }
             }
         }
 
-        *total_nodes += nodes;
+        *total_nodes += self.nodes;
 
         if uci_output {
-            self.search_report(depth.max(1), &timer, nodes);
+            self.search_report(depth.max(1), &timer, self.nodes);
         }
 
         #[cfg(not(feature = "datagen"))]
@@ -198,6 +200,7 @@ impl<'a> Searcher<'a> {
 
     fn perform_one_iteration(&mut self, pos: &mut ChessState, ptr: i32, depth: &mut usize) -> f32 {
         *depth += 1;
+        self.nodes += 1;
 
         self.tree.make_recently_used(ptr);
 

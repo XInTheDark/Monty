@@ -234,14 +234,14 @@ impl<'a> Searcher<'a> {
         // flip perspective of score
         u = 1.0 - u;
 
-        let adjusted_u = if u < 0.1 {
+        u = if u < 0.1 {
             0.0
         } else if u > 0.9 {
             1.0
         } else {
             u
         };
-        self.tree.edge_mut(parent, action).update(adjusted_u);
+        self.tree.edge_mut(parent, action).update(u);
 
         let edge = self.tree.edge(parent, action);
         self.tree.push_hash(hash, edge.visits(), edge.wins());

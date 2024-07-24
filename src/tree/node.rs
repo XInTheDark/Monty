@@ -1,4 +1,5 @@
 use crate::{chess::Move, tree::Edge, ChessState, GameState, MctsParams, PolicyNetwork};
+use half::f16;
 
 #[derive(Clone, Debug)]
 pub struct Node {
@@ -13,7 +14,7 @@ pub struct Node {
     action: u16,
 
     // heuristics used in search
-    gini_impurity: f32,
+    gini_impurity: f16,
 }
 
 impl Node {
@@ -26,7 +27,7 @@ impl Node {
             bwd_link: -1,
             fwd_link: -1,
             action: action as u16,
-            gini_impurity: 0.0,
+            gini_impurity: f16::from_f32(0.0),
         }
     }
 
@@ -74,7 +75,7 @@ impl Node {
         usize::from(self.action)
     }
 
-    pub fn gini_impurity(&self) -> f32 {
+    pub fn gini_impurity(&self) -> f16 {
         self.gini_impurity
     }
 
@@ -149,7 +150,7 @@ impl Node {
         }
 
         let gini_impurity = (1.0 - sum_of_squares).clamp(0.0, 1.0);
-        self.gini_impurity = gini_impurity;
+        self.gini_impurity = f16::from_f32(gini_impurity);
     }
 
     pub fn relabel_policy(

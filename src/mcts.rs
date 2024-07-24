@@ -30,6 +30,7 @@ pub struct Searcher<'a> {
     policy: &'a PolicyNetwork,
     value: &'a ValueNetwork,
     abort: &'a AtomicBool,
+    root_q: f32,
 }
 
 impl<'a> Searcher<'a> {
@@ -48,6 +49,7 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
+            root_q: 0.0,
         }
     }
 
@@ -114,6 +116,9 @@ impl<'a> Searcher<'a> {
                     best_move = new_best_move;
                     best_move_changes += 1;
                 }
+
+                let (_, score) = self.get_pv(0);
+                self.root_q = score;
             }
 
             if nodes % 16384 == 0 {
@@ -122,8 +127,7 @@ impl<'a> Searcher<'a> {
                     let elapsed = timer.elapsed().as_millis();
 
                     // Use more time if our eval is falling, and vice versa
-                    let (_, mut score) = self.get_pv(0);
-                    score = Searcher::get_cp(score);
+                    let score = Searcher::get_cp(self.root_q);
                     let eval_diff = if previous_score == f32::NEG_INFINITY {
                         0.0
                     } else {

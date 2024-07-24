@@ -31,6 +31,7 @@ pub struct Searcher<'a> {
     value: &'a ValueNetwork,
     abort: &'a AtomicBool,
     root_q: f32,
+    root_optimism: f32,
 }
 
 impl<'a> Searcher<'a> {
@@ -50,6 +51,7 @@ impl<'a> Searcher<'a> {
             value,
             abort,
             root_q: 0.0,
+            root_optimism: 1.0,
         }
     }
 
@@ -117,8 +119,9 @@ impl<'a> Searcher<'a> {
                     best_move_changes += 1;
                 }
 
-                // Update root node Q value
+                // Update root node Q value and optimism
                 self.root_q = self.get_root_score();
+                self.root_optimism = SearchHelpers::get_optimism_scaling(&self.params, self.root_q);
             }
 
             if nodes % 16384 == 0 {
@@ -270,7 +273,7 @@ impl<'a> Searcher<'a> {
         let cpuct = SearchHelpers::get_cpuct(&self.params, edge, is_root);
         let fpu = SearchHelpers::get_fpu(edge);
         let expl_scale = SearchHelpers::get_explore_scaling(&self.params, edge);
-        let optimism = SearchHelpers::get_optimism_scaling(&self.params, self.root_q);
+        let optimism = self.root_optimism;
 
         let expl = cpuct * expl_scale * optimism;
 

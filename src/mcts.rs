@@ -117,8 +117,8 @@ impl<'a> Searcher<'a> {
                     best_move_changes += 1;
                 }
 
-                let (_, score) = self.get_pv(0);
-                self.root_q = score;
+                // Update root node Q value
+                self.root_q = self.get_root_score();
             }
 
             if nodes % 16384 == 0 {
@@ -270,8 +270,9 @@ impl<'a> Searcher<'a> {
         let cpuct = SearchHelpers::get_cpuct(&self.params, edge, is_root);
         let fpu = SearchHelpers::get_fpu(edge);
         let expl_scale = SearchHelpers::get_explore_scaling(&self.params, edge);
+        let optimism = SearchHelpers::get_optimism_scaling(&self.params, self.root_q);
 
-        let expl = cpuct * expl_scale;
+        let expl = cpuct * expl_scale * optimism;
 
         self.tree.get_best_child_by_key(ptr, |action| {
             let q = SearchHelpers::get_action_value(action, fpu);
@@ -306,6 +307,22 @@ impl<'a> Searcher<'a> {
         }
 
         println!();
+    }
+
+    fn get_root_score(&self) -> f32 {
+        let idx = self.tree.get_best_child(self.tree.root_node());
+        let action = self.tree.edge(self.tree.root_node(), idx);
+
+        if action.ptr() != -1 {
+            match self.tree[action.ptr()].state() {
+                GameState::Lost(_) => 1.1,
+                GameState::Won(_) => -0.1,
+                GameState::Draw => 0.5,
+                GameState::Ongoing => action.q(),
+            }
+        } else {
+            action.q()
+        }
     }
 
     fn get_pv(&self, mut depth: usize) -> (Vec<Move>, f32) {

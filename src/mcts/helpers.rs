@@ -59,7 +59,7 @@ impl SearchHelpers {
     pub fn get_optimism_scaling(params: &MctsParams, q: f32) -> f32 {
         let scale =
             1.0 + params.optimism1() * (params.optimism2() - q) / (q.abs() + params.optimism3());
-        scale.max(0.3)
+        scale.max(0.2)
     }
 
     /// Calculates the maximum allowed time usage for a search

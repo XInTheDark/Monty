@@ -1,5 +1,7 @@
 use crate::{chess::Move, tree::Edge, ChessState, GameState, MctsParams, PolicyNetwork};
 
+use std::io::Write;
+
 #[derive(Clone, Debug)]
 pub struct Node {
     actions: Vec<Edge>,
@@ -150,6 +152,13 @@ impl Node {
 
         let gini_impurity = (1.0 - sum_of_squares).clamp(0.0, 1.0);
         self.gini_impurity = gini_impurity;
+
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("gini_impurity.txt")
+            .unwrap();
+        writeln!(file, "{}", gini_impurity).unwrap();
     }
 
     pub fn relabel_policy(

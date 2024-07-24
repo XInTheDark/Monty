@@ -55,10 +55,10 @@ impl SearchHelpers {
     }
 
     /// Get the optimism scaling based on the q value of the root node
-    /// A lower q value encourages more exploration.
+    /// A higher q value encourages more exploration.
     pub fn get_optimism_scaling(params: &MctsParams, q: f32) -> f32 {
         let scale =
-            1.0 + params.optimism1() * (params.optimism2() - q) / (q.abs() + params.optimism3());
+            1.0 + params.optimism1() * (params.optimism2() + q) / (q.abs() + params.optimism3());
         scale.max(0.3)
     }
 

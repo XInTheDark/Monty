@@ -153,7 +153,7 @@ impl<'a> Searcher<'a> {
                     previous_score = if previous_score == f32::NEG_INFINITY {
                         score
                     } else {
-                        (score + 2.0 * previous_score) / 3.0
+                        (score + previous_score) / 2.0
                     };
                 }
             }

@@ -76,6 +76,7 @@ impl<'a> Searcher<'a> {
         let mut cumulative_depth = 0;
 
         let mut best_move = Move::NULL;
+        let mut best_score = f32::NEG_INFINITY;
         let mut best_move_changes = 0;
         let mut previous_score = f32::NEG_INFINITY;
 
@@ -109,7 +110,9 @@ impl<'a> Searcher<'a> {
                     }
                 }
 
-                let new_best_move = self.get_best_move();
+                // update best move and score
+                let (new_best_move, q) = self.get_pv(0);
+                best_score = q;
                 if new_best_move != best_move {
                     best_move = new_best_move;
                     best_move_changes += 1;

@@ -1,5 +1,6 @@
 use crate::{chess::Move, tree::Edge, ChessState, GameState, MctsParams, PolicyNetwork};
 use half::f16;
+
 #[derive(Clone, Debug)]
 pub struct Node {
     actions: Vec<Edge>,

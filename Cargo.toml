@@ -12,6 +12,7 @@ codegen-units = 1
 
 [dependencies]
 goober = { git = 'https://github.com/jw1912/goober.git' }
+half = "2.4.1"
 
 [features]
 embed = []

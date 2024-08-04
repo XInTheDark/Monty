@@ -97,6 +97,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunchy"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
+
+[[package]]
 name = "datagen"
 version = "0.1.0"
 dependencies = [
@@ -167,6 +173,16 @@ version = "0.1.0"
 source = "git+https://github.com/jw1912/goober.git#32b9b52e68ef03d9d706548fb21bb3c4535c4dd2"
 dependencies = [
  "goober-core",
+]
+
+[[package]]
+name = "half"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
+dependencies = [
+ "cfg-if",
+ "crunchy",
 ]
 
 [[package]]
@@ -241,6 +257,7 @@ name = "monty"
 version = "1.0.0"
 dependencies = [
  "goober",
+ "half",
 ]
 
 [[package]]

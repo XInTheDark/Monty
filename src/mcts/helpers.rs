@@ -33,7 +33,7 @@ impl SearchHelpers {
     pub fn get_explore_scaling(params: &MctsParams, parent: &Edge, node: &Node) -> f32 {
         let mut scale = (params.expl_tau() * (parent.visits().max(1) as f32).ln()).exp();
         let gini = node.gini_impurity();
-        scale *= -1.034 * gini * gini + 0.213 * gini + 1.500;
+        scale *= 1.513 * (-0.629 * gini).exp();
         scale
     }
 

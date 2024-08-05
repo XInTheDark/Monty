@@ -57,8 +57,6 @@ impl ActionStats {
             2.0 / (v + 1.0)
         };
 
-        // q is essentially a moving average of the results,
-        // with exponential decay, and the weight is w
         let new_q = (self.q64() * v + r) / (v + 1.0);
         let q = new_q * (1.0 - w) + r * w;
         let new_sq_q = (self.sq_q() * v + r.powi(2)) / (v + 1.0);

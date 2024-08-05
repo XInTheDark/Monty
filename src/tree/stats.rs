@@ -54,7 +54,7 @@ impl ActionStats {
         let w = if let Some(w) = weight {
             f64::from(w)
         } else {
-            2.0 / (v + 2.0)
+            1.5 / (v + 2.0)
         };
 
         // q is essentially a moving average of the results,

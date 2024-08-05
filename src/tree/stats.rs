@@ -51,7 +51,11 @@ impl ActionStats {
     pub fn update(&self, result: f32, weight: Option<f32>) {
         let r = f64::from(result);
         let v = f64::from(self.visits.fetch_add(1, Ordering::Relaxed));
-        let w = f64::from(weight.unwrap_or(0.05));
+        let w = if let Some(w) = weight {
+            f64::from(w)
+        } else {
+            5.0 / (v + 2.0)
+        };
 
         // q is essentially a moving average of the results,
         // with exponential decay, and the weight is w

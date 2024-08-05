@@ -105,7 +105,7 @@ impl<'a> Searcher<'a> {
                 self.tree.root_stats(),
                 &mut this_depth,
             ) {
-                self.tree.root_stats().update(u);
+                self.tree.root_stats().update(u, None);
             } else {
                 return false;
             }
@@ -315,7 +315,7 @@ impl<'a> Searcher<'a> {
 
             let u = maybe_u?;
 
-            let new_q = self.tree.update_edge_stats(ptr, action, u);
+            let new_q = self.tree.update_edge_stats(ptr, action, u, None);
             self.tree.push_hash(hash, new_q);
 
             child_state = self.tree[child_ptr].state();

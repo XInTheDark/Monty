@@ -167,10 +167,16 @@ impl Tree {
         self[ptr].actions()[action].clone()
     }
 
-    pub fn update_edge_stats(&self, ptr: NodePtr, action: usize, result: f32) -> f32 {
+    pub fn update_edge_stats(
+        &self,
+        ptr: NodePtr,
+        action: usize,
+        result: f32,
+        weight: Option<f32>,
+    ) -> f32 {
         let actions = &self[ptr].actions();
         let edge = &actions[action];
-        edge.update(result);
+        edge.update(result, weight);
         edge.q()
     }
 

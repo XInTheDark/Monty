@@ -86,7 +86,7 @@ impl Edge {
             .store((policy * f32::from(i16::MAX)) as i16, Ordering::Relaxed)
     }
 
-    pub fn update(&self, result: f32) {
-        self.stats.update(result);
+    pub fn update(&self, result: f32, weight: Option<f32>) {
+        self.stats.update(result, weight);
     }
 }

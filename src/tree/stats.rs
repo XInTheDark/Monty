@@ -54,15 +54,13 @@ impl ActionStats {
         let w = if let Some(w) = weight {
             f64::from(w)
         } else {
-            2.0 / (v + 1.0)
+            2.0 / (v + 2.0)
         };
 
         // q is essentially a moving average of the results,
         // with exponential decay, and the weight is w
-        let new_q = (self.q64() * v + r) / (v + 1.0);
-        let q = new_q * (1.0 - w) + r * w;
-        let new_sq_q = (self.sq_q() * v + r.powi(2)) / (v + 1.0);
-        let sq_q = new_sq_q * (1.0 - w) + r.powi(2) * w;
+        let q = self.q64() * (1.0 - w) + r * w;
+        let sq_q = self.sq_q() * (1.0 - w) + r.powi(2) * w;
 
         self.q
             .store((q * f64::from(u32::MAX)) as u32, Ordering::Relaxed);

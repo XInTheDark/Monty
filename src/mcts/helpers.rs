@@ -3,6 +3,7 @@ use std::time::Instant;
 use crate::{
     mcts::{MctsParams, Searcher},
     tree::{ActionStats, Edge, Node},
+    ChessState,
 };
 
 pub struct SearchHelpers;
@@ -35,10 +36,22 @@ impl SearchHelpers {
     /// Exploration Scaling
     ///
     /// Larger value implies more exploration.
-    pub fn get_explore_scaling(params: &MctsParams, node_stats: &ActionStats, node: &Node) -> f32 {
+    pub fn get_explore_scaling(
+        params: &MctsParams,
+        node_stats: &ActionStats,
+        node: &Node,
+        pos: &ChessState,
+    ) -> f32 {
         let mut scale = (params.expl_tau() * (node_stats.visits().max(1) as f32).ln()).exp();
+
+        // Scale exploration with Gini impurity of policy values
         let gini = node.gini_impurity();
         scale *= (0.679 - 1.634 * (gini + 0.001).ln()).min(2.1);
+
+        // Scale exploration with material
+        let mat = pos.get_material(params) as f32;
+        scale *= -0.0346 * mat.ln_1p() - 0.000083 * mat + 2.0013;
+
         scale
     }
 

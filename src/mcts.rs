@@ -302,7 +302,7 @@ impl<'a> Searcher<'a> {
             }
 
             // select action to take via PUCT
-            let action = self.pick_action(ptr, node_stats);
+            let action = self.pick_action(ptr, pos, node_stats);
 
             let edge = self.tree.edge_copy(ptr, action);
 
@@ -340,7 +340,7 @@ impl<'a> Searcher<'a> {
         }
     }
 
-    fn pick_action(&self, ptr: NodePtr, node_stats: &ActionStats) -> usize {
+    fn pick_action(&self, ptr: NodePtr, pos: &ChessState, node_stats: &ActionStats) -> usize {
         if !self.tree[ptr].has_children() {
             panic!("trying to pick from no children!");
         }
@@ -350,7 +350,7 @@ impl<'a> Searcher<'a> {
         let cpuct = SearchHelpers::get_cpuct(self.params, node_stats, is_root);
         let fpu = SearchHelpers::get_fpu(node_stats);
         let expl_scale =
-            SearchHelpers::get_explore_scaling(self.params, node_stats, &self.tree[ptr]);
+            SearchHelpers::get_explore_scaling(self.params, node_stats, &self.tree[ptr], pos);
 
         let expl = cpuct * expl_scale;
 

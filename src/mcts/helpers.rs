@@ -50,7 +50,7 @@ impl SearchHelpers {
 
         // Scale exploration with material
         let mat = pos.get_material(params) as f32;
-        scale *= 1.700 - mat / 10395.0;
+        scale *= 1.600 - mat / 12000.0;
 
         scale
     }

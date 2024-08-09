@@ -311,7 +311,7 @@ impl<'a> Searcher<'a> {
                 self.get_utility(ptr, pos)
             }
         } else if node_stats.q() > 0.90 && *depth > *selective_depth - 4 {
-            node_stats.q()
+            self.get_utility(ptr, pos)
         } else {
             // expand node on the second visit
             if self.tree[ptr].is_not_expanded() {

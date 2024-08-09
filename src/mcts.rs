@@ -169,6 +169,7 @@ impl<'a> Searcher<'a> {
                     timer,
                     *previous_score,
                     *best_move_changes,
+                    &self.tree[self.tree.root_node()],
                     nodes,
                     time,
                 );

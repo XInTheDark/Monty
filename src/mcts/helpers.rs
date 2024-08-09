@@ -62,6 +62,19 @@ impl SearchHelpers {
         }
     }
 
+    /// Calculates the Gini impurity of the q values of a node
+    /// as defined by 1 - sum(q^2).
+    ///
+    /// #### Note
+    /// Must return a value in [0, 1].
+    pub fn get_gini_impurity(node: &Node) -> f32 {
+        let mut sum_of_squares = 0.0;
+        for action in node.actions().iter() {
+            sum_of_squares += action.q().powi(2);
+        }
+        1.0 - sum_of_squares
+    }
+
     /// Calculates the maximum allowed time usage for a search
     ///
     /// #### Note
@@ -121,6 +134,7 @@ impl SearchHelpers {
         timer: &Instant,
         previous_score: f32,
         best_move_changes: i32,
+        root_node: &Node,
         nodes: usize,
         time: u128,
     ) -> (bool, f32) {
@@ -151,8 +165,12 @@ impl SearchHelpers {
                 * searcher.params.tm_bmv4())
         .clamp(searcher.params.tm_bmv5(), searcher.params.tm_bmv6());
 
+        // Use more time if the Gini impurity of the root node is high
+        let gini = SearchHelpers::get_gini_impurity(root_node);
+        let gini_impurity = (0.679 - 1.634 * (gini + 0.001).ln()).min( 1.8);
+
         let total_time =
-            (time as f32 * falling_eval * best_move_instability * best_move_visits) as u128;
+            (time as f32 * falling_eval * best_move_instability * best_move_visits * gini_impurity) as u128;
 
         (elapsed >= total_time, score)
     }

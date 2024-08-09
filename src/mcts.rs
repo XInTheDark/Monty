@@ -60,12 +60,13 @@ impl<'a> Searcher<'a> {
         nodes: &mut usize,
         depth: &mut usize,
         cumulative_depth: &mut usize,
+        selective_depth: &mut usize,
         best_move: &mut Move,
         best_move_changes: &mut i32,
         previous_score: &mut f32,
         #[cfg(not(feature = "uci-minimal"))] uci_output: bool,
     ) {
-        if self.playout_until_full_internal(nodes, cumulative_depth, |n, cd| {
+        if self.playout_until_full_internal(nodes, cumulative_depth, selective_depth, |n, cd| {
             self.check_limits(
                 limits,
                 timer,
@@ -83,14 +84,23 @@ impl<'a> Searcher<'a> {
         }
     }
 
-    fn playout_until_full_worker(&self, nodes: &mut usize, cumulative_depth: &mut usize) {
-        let _ = self.playout_until_full_internal(nodes, cumulative_depth, |_, _| false);
+    fn playout_until_full_worker(
+        &self,
+        nodes: &mut usize,
+        cumulative_depth: &mut usize,
+        selective_depth: &mut usize,
+    ) {
+        let _ =
+            self.playout_until_full_internal(nodes, cumulative_depth, selective_depth, |_, _| {
+                false
+            });
     }
 
     fn playout_until_full_internal<F>(
         &self,
         nodes: &mut usize,
         cumulative_depth: &mut usize,
+        selective_depth: &mut usize,
         mut stop: F,
     ) -> bool
     where
@@ -105,6 +115,7 @@ impl<'a> Searcher<'a> {
                 self.tree.root_node(),
                 self.tree.root_stats(),
                 &mut this_depth,
+                &selective_depth,
             ) {
                 self.tree.root_stats().update(u);
             } else {
@@ -112,6 +123,7 @@ impl<'a> Searcher<'a> {
             }
 
             *cumulative_depth += this_depth - 1;
+            *selective_depth = *selective_depth.max(&mut this_depth);
             *nodes += 1;
 
             // proven checkmate
@@ -228,6 +240,7 @@ impl<'a> Searcher<'a> {
         let mut nodes = 0;
         let mut depth = 0;
         let mut cumulative_depth = 0;
+        let mut selective_depth = 0;
 
         let mut best_move = Move::NULL;
         let mut best_move_changes = 0;
@@ -243,6 +256,7 @@ impl<'a> Searcher<'a> {
                         &mut nodes,
                         &mut depth,
                         &mut cumulative_depth,
+                        &mut selective_depth,
                         &mut best_move,
                         &mut best_move_changes,
                         &mut previous_score,
@@ -252,7 +266,7 @@ impl<'a> Searcher<'a> {
                 });
 
                 for _ in 0..threads - 1 {
-                    s.spawn(|| self.playout_until_full_worker(&mut 0, &mut 0));
+                    s.spawn(|| self.playout_until_full_worker(&mut 0, &mut 0, &mut 0));
                 }
             });
 
@@ -277,6 +291,7 @@ impl<'a> Searcher<'a> {
         ptr: NodePtr,
         node_stats: &ActionStats,
         depth: &mut usize,
+        selective_depth: &usize,
     ) -> Option<f32> {
         *depth += 1;
 
@@ -295,6 +310,8 @@ impl<'a> Searcher<'a> {
             } else {
                 self.get_utility(ptr, pos)
             }
+        } else if node_stats.q() > 0.90 && *depth > *selective_depth - 4 {
+            node_stats.q()
         } else {
             // expand node on the second visit
             if self.tree[ptr].is_not_expanded() {
@@ -312,7 +329,8 @@ impl<'a> Searcher<'a> {
 
             self.tree[child_ptr].inc_threads();
 
-            let maybe_u = self.perform_one_iteration(pos, child_ptr, &edge.stats(), depth);
+            let maybe_u =
+                self.perform_one_iteration(pos, child_ptr, &edge.stats(), depth, selective_depth);
 
             self.tree[child_ptr].dec_threads();
 

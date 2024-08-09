@@ -310,7 +310,7 @@ impl<'a> Searcher<'a> {
             } else {
                 self.get_utility(ptr, pos)
             }
-        } else if (node_stats.q() > 0.90 || node_stats.q() < 0.10) && *depth > *selective_depth - 4 {
+        } else if (node_stats.q() > 0.95 || node_stats.q() < 0.05) && *depth > *selective_depth - 4 {
             self.get_utility(ptr, pos)
         } else {
             // expand node on the second visit

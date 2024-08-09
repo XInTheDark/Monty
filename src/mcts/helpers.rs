@@ -68,9 +68,14 @@ impl SearchHelpers {
     /// #### Note
     /// Must return a value in [0, 1].
     pub fn get_gini_impurity(node: &Node) -> f32 {
+        let mut sum = 0.0;
         let mut sum_of_squares = 0.0;
         for action in node.actions().iter() {
-            sum_of_squares += action.q().powi(2);
+            sum += action.q();
+        }
+        for action in node.actions().iter() {
+            let q = action.q() / sum;
+            sum_of_squares += q * q;
         }
         1.0 - sum_of_squares
     }
@@ -167,7 +172,8 @@ impl SearchHelpers {
 
         // Use more time if the Gini impurity of the root node is high
         let gini = SearchHelpers::get_gini_impurity(root_node);
-        let gini_impurity = (0.65 - 1.20 * (gini + 0.001).ln()).min(2.0);
+        println!("Gini: {}", gini);
+        let gini_impurity = (0.65 - 1.20 * ((1.0 - gini) + 0.001).ln()).min(2.0);
 
         let total_time =
             (time as f32 * falling_eval * best_move_instability * best_move_visits * gini_impurity)

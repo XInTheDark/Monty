@@ -301,7 +301,7 @@ impl<'a> Searcher<'a> {
 
         let u = if self.tree[ptr].is_terminal() || node_stats.visits() == 0 {
             self.get_hash_utility(hash, ptr, pos)
-        } else if (node_stats.q() > 0.90 || node_stats.q() < 0.10) && *depth > *selective_depth - 4 {
+        } else if (node_stats.q() > 0.90 || node_stats.q() < 0.10) && *depth > *selective_depth - 3 {
             self.get_hash_utility(hash, ptr, pos)
         } else {
             // expand node on the second visit

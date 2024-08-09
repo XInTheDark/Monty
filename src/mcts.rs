@@ -300,18 +300,7 @@ impl<'a> Searcher<'a> {
         let mut child_state = GameState::Ongoing;
 
         let u = if self.tree[ptr].is_terminal() || node_stats.visits() == 0 {
-            // probe hash table to use in place of network
-            if self.tree[ptr].state() == GameState::Ongoing {
-                if let Some(entry) = self.tree.probe_hash(hash) {
-                    entry.q()
-                } else {
-                    self.get_utility(ptr, pos)
-                }
-            } else {
-                self.get_utility(ptr, pos)
-            }
-        } else if node_stats.q() > 0.90 && *depth > *selective_depth - 4 {
-            self.get_utility(ptr, pos)
+            self.get_hash_utility(hash, ptr, pos)
         } else {
             // expand node on the second visit
             if self.tree[ptr].is_not_expanded() {
@@ -322,6 +311,10 @@ impl<'a> Searcher<'a> {
             let action = self.pick_action(ptr, node_stats);
 
             let edge = self.tree.edge_copy(ptr, action);
+
+            if edge.q() > 0.90 && *depth > *selective_depth - 4 {
+                return Some(self.get_hash_utility(hash, ptr, pos));
+            }
 
             pos.make_move(Move::from(edge.mov()));
 
@@ -355,6 +348,19 @@ impl<'a> Searcher<'a> {
             GameState::Draw => 0.5,
             GameState::Lost(_) => 0.0,
             GameState::Won(_) => 1.0,
+        }
+    }
+
+    fn get_hash_utility(&self, hash: u64, ptr: NodePtr, pos: &ChessState) -> f32 {
+        // probe hash table to use in place of network
+        if self.tree[ptr].state() == GameState::Ongoing {
+            if let Some(entry) = self.tree.probe_hash(hash) {
+                entry.q()
+            } else {
+                self.get_utility(ptr, pos)
+            }
+        } else {
+            self.get_utility(ptr, pos)
         }
     }
 

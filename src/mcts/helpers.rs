@@ -167,7 +167,7 @@ impl SearchHelpers {
 
         // Use more time if the Gini impurity of the root node is high
         let gini = SearchHelpers::get_gini_impurity(root_node);
-        let gini_impurity = (0.679 - 1.634 * (gini + 0.001).ln()).min(1.8);
+        let gini_impurity = (0.65 - 1.20 * (gini + 0.001).ln()).min(2.0);
 
         let total_time =
             (time as f32 * falling_eval * best_move_instability * best_move_visits * gini_impurity)

@@ -316,7 +316,7 @@ impl<'a> Searcher<'a> {
 
             self.tree[child_ptr].dec_threads();
 
-            let u = maybe_u? * 0.8 + edge.q() * 0.2;
+            let u = maybe_u? * 0.95 + edge.q() * 0.05;
 
             let new_q = self.tree.update_edge_stats(ptr, action, u);
             self.tree.push_hash(hash, new_q);

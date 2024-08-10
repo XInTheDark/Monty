@@ -356,7 +356,8 @@ impl<'a> Searcher<'a> {
 
         self.tree.get_best_child_by_key(ptr, |action| {
             let q = if !action.ptr().is_null() && self.tree[action.ptr()].threads() > 0 {
-                0.0
+                let n = self.tree[action.ptr()].threads() as f32;
+                (action.q() * n.ln_1p() * 0.1).min(0.5)
             } else {
                 SearchHelpers::get_action_value(action, fpu)
             };

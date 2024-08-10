@@ -284,7 +284,11 @@ impl<'a> Searcher<'a> {
 
         let mut child_state = GameState::Ongoing;
 
-        let u = if self.tree[ptr].is_terminal() || node_stats.visits() == 0 {
+        let u = if self.tree[ptr].is_terminal()
+            || node_stats.visits() == 0
+            || (node_stats.visits() > 500 * (*depth as i32).pow(2)
+                && (node_stats.q() < 0.2 || node_stats.q() > 0.8))
+        {
             // probe hash table to use in place of network
             if self.tree[ptr].state() == GameState::Ongoing {
                 if let Some(entry) = self.tree.probe_hash(hash) {

@@ -164,7 +164,7 @@ impl ChessState {
         #[cfg(not(feature = "datagen"))]
         {
             use consts::Piece;
-            let raw_eval = value.eval(&self.board);
+            let mut eval = value.eval(&self.board);
 
             let mut mat = self.piece_count(Piece::KNIGHT) * _params.knight_value()
                 + self.piece_count(Piece::BISHOP) * _params.bishop_value()
@@ -173,7 +173,11 @@ impl ChessState {
 
             mat = _params.material_offset() + mat / _params.material_div1();
 
-            raw_eval * mat / _params.material_div2()
+            eval = eval * mat / _params.material_div2();
+
+            eval -= eval * self.board.halfm() as i32 / 212;
+
+            eval
         }
 
         #[cfg(feature = "datagen")]

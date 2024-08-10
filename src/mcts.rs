@@ -295,8 +295,8 @@ impl<'a> Searcher<'a> {
             } else {
                 self.get_utility(ptr, pos)
             }
-        } else if node_stats.visits() > 500 * (*depth as i32).pow(2) && node_stats.q() < 0.2
-            || node_stats.q() > 0.8
+        } else if node_stats.visits() > 500 * (*depth as i32).pow(2)
+            && (node_stats.q() < 0.2 || node_stats.q() > 0.8)
         {
             node_stats.q()
         } else {

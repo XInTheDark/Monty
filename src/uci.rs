@@ -313,17 +313,17 @@ fn go(
         max_time = Some(max_time.unwrap_or(u128::MAX).min(max));
     }
 
-    // 20ms move overhead
+    let abort = AtomicBool::new(false);
+
+    let use_subtree_elapsed = tree.try_use_subtree(pos, &prev, threads);
+
+    // Apply a fixed move overhead, as well as the time taken to process the subtree.
     if let Some(t) = opt_time.as_mut() {
         *t = t.saturating_sub(20);
     }
     if let Some(t) = max_time.as_mut() {
-        *t = t.saturating_sub(20);
+        *t = t.saturating_sub(20 + use_subtree_elapsed);
     }
-
-    let abort = AtomicBool::new(false);
-
-    tree.try_use_subtree(pos, &prev, threads);
 
     let limits = Limits {
         max_time,

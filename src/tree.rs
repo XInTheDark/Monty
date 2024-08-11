@@ -232,12 +232,12 @@ impl Tree {
         root: &ChessState,
         prev_board: &Option<ChessState>,
         threads: usize,
-    ) {
+    ) -> u128 {
         let t = Instant::now();
 
         if self.is_empty() {
             self.push_new(GameState::Ongoing).unwrap();
-            return;
+            return 0;
         }
 
         println!("info string attempting to reuse tree");
@@ -271,10 +271,10 @@ impl Tree {
             self.push_new(GameState::Ongoing).unwrap();
         }
 
-        println!(
-            "info string tree processing took {} microseconds",
-            t.elapsed().as_micros()
-        );
+        let elapsed = t.elapsed().as_micros();
+        println!("info string tree processing took {} microseconds", elapsed);
+
+        elapsed
     }
 
     fn recurse_find(

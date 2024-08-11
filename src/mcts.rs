@@ -312,7 +312,7 @@ impl<'a> Searcher<'a> {
 
             let edge = self.tree.edge_copy(ptr, action);
 
-            let use_correction_history = edge.visits() == 0;
+            let use_correction_history = true;
 
             pos.make_move(Move::from(edge.mov()));
 

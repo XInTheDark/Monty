@@ -148,8 +148,8 @@ impl<'a> Searcher<'a> {
         }
 
         if nodes % 128 == 0 {
-            print!("t: {} ", timer.elapsed().as_millis());
             if let Some(time) = limits.max_time {
+                print!("t: {} ", timer.elapsed().as_millis());
                 if timer.elapsed().as_millis() >= time {
                     return true;
                 }

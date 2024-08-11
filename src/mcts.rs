@@ -327,7 +327,7 @@ impl<'a> Searcher<'a> {
 
             // apply correction history
             let ch_delta = ch_entry.delta();
-            u = u - ch_delta * 0.3;
+            u = u - ch_delta * 0.1;
             u = u.clamp(0.0, 1.0);
 
             let new_q =

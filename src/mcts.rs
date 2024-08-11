@@ -285,6 +285,7 @@ impl<'a> Searcher<'a> {
         *depth += 1;
 
         let hash = pos.hash();
+        let ch_hash = pos.ch_hash();
 
         let mut child_state = GameState::Ongoing;
 
@@ -322,7 +323,6 @@ impl<'a> Searcher<'a> {
 
             let mut u = maybe_u?;
 
-            let ch_hash = pos.ch_hash();
             let ch_entry = self.ch_table.get(ch_hash);
 
             // apply correction history

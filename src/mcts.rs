@@ -285,7 +285,6 @@ impl<'a> Searcher<'a> {
         *depth += 1;
 
         let hash = pos.hash();
-        let ch_hash = pos.ch_hash();
 
         let mut child_state = GameState::Ongoing;
 
@@ -311,8 +310,6 @@ impl<'a> Searcher<'a> {
 
             let edge = self.tree.edge_copy(ptr, action);
 
-            let use_correction_history = true;
-
             pos.make_move(Move::from(edge.mov()));
 
             let child_ptr = self.tree.fetch_node(pos, ptr, edge.ptr(), action)?;
@@ -325,14 +322,13 @@ impl<'a> Searcher<'a> {
 
             let mut u = maybe_u?;
 
+            let ch_hash = pos.ch_hash();
             let ch_entry = self.ch_table.get(ch_hash);
 
             // apply correction history
-            if use_correction_history {
-                let ch_delta = ch_entry.delta();
-                u = u - ch_delta * 0.3;
-                u = u.clamp(0.0, 1.0);
-            }
+            let ch_delta = ch_entry.delta();
+            u = u - ch_delta * 0.3;
+            u = u.clamp(0.0, 1.0);
 
             let new_q =
                 self.tree

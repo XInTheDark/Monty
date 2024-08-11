@@ -319,10 +319,10 @@ fn go(
 
     // Apply a fixed move overhead, as well as the time taken to process the subtree.
     if let Some(t) = opt_time.as_mut() {
-        *t = t.saturating_sub(20);
+        *t = t.saturating_sub(10);
     }
     if let Some(t) = max_time.as_mut() {
-        *t = t.saturating_sub(20 + use_subtree_elapsed);
+        *t = t.saturating_sub(10 + use_subtree_elapsed);
     }
 
     let limits = Limits {

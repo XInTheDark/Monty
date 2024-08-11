@@ -90,11 +90,12 @@ impl Edge {
     pub fn update(
         &self,
         result: f32,
+        stm: usize,
         ch_hash: u64,
         ch_entry: CorrectionHistoryEntry,
         ch_table: &CorrectionHistoryHashTable,
     ) {
         self.stats
-            .update_with_correction_history(result, ch_hash, ch_entry, ch_table);
+            .update_with_correction_history(result, stm, ch_hash, ch_entry, ch_table);
     }
 }

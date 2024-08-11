@@ -171,13 +171,14 @@ impl Tree {
         ptr: NodePtr,
         action: usize,
         result: f32,
+        stm: usize,
         ch_hash: u64,
         ch_entry: CorrectionHistoryEntry,
         ch_table: &CorrectionHistoryHashTable,
     ) -> f32 {
         let actions = &self[ptr].actions();
         let edge = &actions[action];
-        edge.update(result, ch_hash, ch_entry, ch_table);
+        edge.update(result, stm, ch_hash, ch_entry, ch_table);
         edge.q()
     }
 

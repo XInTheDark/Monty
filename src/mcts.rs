@@ -322,8 +322,9 @@ impl<'a> Searcher<'a> {
 
             let mut u = maybe_u?;
 
+            let stm = pos.stm();
             let ch_hash = pos.ch_hash();
-            let ch_entry = self.ch_table.get(ch_hash);
+            let ch_entry = self.ch_table.get(stm, ch_hash);
 
             // apply correction history
             let ch_delta = ch_entry.delta();
@@ -331,7 +332,7 @@ impl<'a> Searcher<'a> {
 
             let new_q =
                 self.tree
-                    .update_edge_stats(ptr, action, u, ch_hash, ch_entry, &self.ch_table);
+                    .update_edge_stats(ptr, action, u, stm, ch_hash, ch_entry, &self.ch_table);
 
             self.tree.push_hash(hash, new_q);
 

@@ -152,7 +152,8 @@ impl From<CorrectionHistoryEntry> for u64 {
 }
 
 pub struct CorrectionHistoryHashTable {
-    table: Vec<CorrectionHistoryEntryInternal>,
+    // table is a 2d vector, [side to move][index]
+    table: Vec<Vec<CorrectionHistoryEntryInternal>>,
 }
 
 const CORRECTION_HISTORY_SIZE: u64 = 16384;
@@ -160,31 +161,32 @@ const CORRECTION_HISTORY_SIZE: u64 = 16384;
 impl CorrectionHistoryHashTable {
     pub fn new() -> Self {
         let table = vec![
-            CorrectionHistoryEntryInternal(AtomicU64::new(0));
-            CORRECTION_HISTORY_SIZE as usize
+            vec![
+                CorrectionHistoryEntryInternal(AtomicU64::new(0));
+                CORRECTION_HISTORY_SIZE as usize
+            ];
+            2
         ];
         CorrectionHistoryHashTable { table }
     }
 
-    pub fn get(&self, key: u64) -> CorrectionHistoryEntry {
+    pub fn get(&self, stm: usize, key: u64) -> CorrectionHistoryEntry {
         let index = (key % CORRECTION_HISTORY_SIZE) as usize;
-        CorrectionHistoryEntry::from(&self.table[index])
+        CorrectionHistoryEntry::from(&self.table[stm][index])
     }
 
-    pub fn set(&self, key: u64, e: CorrectionHistoryEntry) {
+    pub fn set(&self, stm: usize, key: u64, e: CorrectionHistoryEntry) {
         let index = (key % CORRECTION_HISTORY_SIZE) as usize;
-        self.table[index].0.store(u64::from(e), Ordering::Relaxed);
+        self.table[stm][index]
+            .0
+            .store(u64::from(e), Ordering::Relaxed);
     }
-
-    // pub fn add(&mut self, key: u32, e: CorrectionHistoryEntry) {
-    //     let index = key as usize % CORRECTION_HISTORY_SIZE as usize;
-    //     let bonus = e.value.clamp(-CORRECTION_HISTORY_LIMIT, CORRECTION_HISTORY_LIMIT);
-    //     self.table[index].value += bonus - self.table[index].value.abs() / CORRECTION_HISTORY_LIMIT;
-    // }
 
     pub fn clear(&mut self) {
-        for entry in self.table.iter_mut() {
-            entry.0.store(0, Ordering::Relaxed);
+        for stm in self.table.iter_mut() {
+            for entry in stm.iter_mut() {
+                entry.0.store(0, Ordering::Relaxed);
+            }
         }
     }
 }

@@ -65,6 +65,7 @@ impl ActionStats {
     pub fn update_with_correction_history(
         &self,
         result: f32,
+        stm: usize,
         hash: u64,
         entry: CorrectionHistoryEntry,
         ch_table: &CorrectionHistoryHashTable,
@@ -72,7 +73,7 @@ impl ActionStats {
         // update correction history
         let value = entry.value + self.q() - result;
         let visits = entry.visits + 1;
-        ch_table.set(hash, CorrectionHistoryEntry { value, visits });
+        ch_table.set(stm, hash, CorrectionHistoryEntry { value, visits });
         self.update(result);
     }
 

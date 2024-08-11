@@ -129,6 +129,7 @@ impl Uci {
                     prev = None;
                     root_game_ply = 0;
                     tree.clear(threads);
+                    ch_table.clear();
                 }
                 _ => {}
             }

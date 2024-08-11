@@ -311,7 +311,7 @@ impl<'a> Searcher<'a> {
 
             let edge = self.tree.edge_copy(ptr, action);
 
-            let use_correction_history = edge.visits() == 0;
+            let use_correction_history = true;
 
             pos.make_move(Move::from(edge.mov()));
 
@@ -331,6 +331,7 @@ impl<'a> Searcher<'a> {
             if use_correction_history {
                 let ch_delta = ch_entry.delta();
                 u = u - ch_delta * 0.3;
+                u = u.clamp(0.0, 1.0);
             }
 
             let new_q =

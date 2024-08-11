@@ -123,6 +123,10 @@ impl ChessState {
         self.board.hash()
     }
 
+    pub fn ch_hash(&self) -> u64 {
+        self.board.ch_hash()
+    }
+
     pub fn make_move(&mut self, mov: Move) {
         self.stack.push(self.board.hash());
         self.board.make(mov, &self.castling);

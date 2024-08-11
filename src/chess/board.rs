@@ -74,6 +74,18 @@ impl Board {
         hash ^ ZVALS.cr[usize::from(self.rights)] ^ ZVALS.c[self.stm()]
     }
 
+    #[must_use]
+    pub fn internal_hash(&self, val: u64) -> u64 {
+        0xfad0d7f2fbb059f1u64 * (val + 0xbaad41cdcb839961u64) + 0x7acec0050bf82f43u64 * ((val >> 31) + 0xd571b3a92b1b2755u64)
+    }
+    pub fn hash_cat(&self, a: u64, b: u64) -> u64 {
+        a ^ (0x299799adf0d95defu64 + self.internal_hash(b) + (a << 6) + (a >> 2))
+    }
+    #[must_use]
+    pub fn ch_hash(&self) -> u64 {
+        self.hash_cat(self.bb[Side::WHITE] & self.bb[Piece::PAWN], self.bb[Side::BLACK] & self.bb[Piece::PAWN])
+    }
+
     // POSITION INFO
 
     #[must_use]

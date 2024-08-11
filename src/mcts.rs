@@ -286,6 +286,9 @@ impl<'a> Searcher<'a> {
 
         let hash = pos.hash();
 
+        let ch_hash = pos.ch_hash();
+        let stm = pos.stm();
+
         let mut child_state = GameState::Ongoing;
 
         let u = if self.tree[ptr].is_terminal() || node_stats.visits() == 0 {
@@ -322,13 +325,11 @@ impl<'a> Searcher<'a> {
 
             let mut u = maybe_u?;
 
-            let stm = pos.stm();
-            let ch_hash = pos.ch_hash();
-            let ch_entry = self.ch_table.get(stm, ch_hash);
-
             // apply correction history
+            let ch_entry = self.ch_table.get(stm, ch_hash);
             let ch_delta = ch_entry.delta();
             u = u - ch_delta * 0.3;
+            u = u.clamp(0.0, 1.0);
 
             let new_q =
                 self.tree

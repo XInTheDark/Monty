@@ -286,9 +286,15 @@ impl<'a> Searcher<'a> {
 
         let hash = pos.hash();
 
+        let stm = pos.stm();
+        let ch_hash = pos.ch_hash();
+        let ch_entry = self.ch_table.get(stm, ch_hash);
+
         let mut child_state = GameState::Ongoing;
 
-        let u = if self.tree[ptr].is_terminal() || node_stats.visits() == 0 {
+        let is_terminal = self.tree[ptr].is_terminal() || node_stats.visits() == 0;
+
+        let mut u = if is_terminal {
             // probe hash table to use in place of network
             if self.tree[ptr].state() == GameState::Ongoing {
                 if let Some(entry) = self.tree.probe_hash(hash) {
@@ -320,15 +326,7 @@ impl<'a> Searcher<'a> {
 
             self.tree[child_ptr].dec_threads();
 
-            let mut u = maybe_u?;
-
-            let stm = pos.stm();
-            let ch_hash = pos.ch_hash();
-            let ch_entry = self.ch_table.get(stm, ch_hash);
-
-            // apply correction history
-            let ch_delta = ch_entry.delta();
-            u = u - ch_delta * 0.3;
+            let u = maybe_u?;
 
             let new_q =
                 self.tree
@@ -342,6 +340,12 @@ impl<'a> Searcher<'a> {
         };
 
         self.tree.propogate_proven_mates(ptr, child_state);
+
+        if !is_terminal {
+            // apply correction history
+            let ch_delta = ch_entry.delta();
+            u = u - ch_delta * 0.3;
+        }
 
         Some(1.0 - u)
     }

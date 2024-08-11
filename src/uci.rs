@@ -69,7 +69,7 @@ impl Uci {
                         &mut tree,
                         prev,
                         &pos,
-                        root_game_ply,
+                        210,
                         &params,
                         report_moves,
                         policy,

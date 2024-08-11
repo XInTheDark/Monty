@@ -315,7 +315,7 @@ fn go(
 
     let abort = AtomicBool::new(false);
 
-    let use_subtree_elapsed = tree.try_use_subtree(pos, &prev, threads);
+    let use_subtree_elapsed = tree.try_use_subtree(pos, &prev, threads) / 1000;
 
     // Apply a fixed move overhead, as well as the time taken to process the subtree.
     if let Some(t) = opt_time.as_mut() {

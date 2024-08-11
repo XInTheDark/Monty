@@ -4,6 +4,7 @@ use crate::{
     MctsParams, PolicyNetwork, Tree, ValueNetwork,
 };
 
+use crate::tree::hash::CorrectionHistoryHashTable;
 use std::{
     io, process,
     sync::atomic::{AtomicBool, Ordering},
@@ -25,6 +26,7 @@ impl Uci {
         let mut root_game_ply = 0;
         let mut params = MctsParams::default();
         let mut tree = Tree::new_mb(64, 1);
+        let mut ch_table = CorrectionHistoryHashTable::new();
         let mut report_moves = false;
         let mut threads = 1;
 
@@ -67,6 +69,7 @@ impl Uci {
                     go(
                         &commands,
                         &mut tree,
+                        &mut ch_table,
                         prev,
                         &pos,
                         root_game_ply,
@@ -145,12 +148,13 @@ impl Uci {
         };
 
         let mut tree = Tree::new_mb(32, 1);
+        let mut ch_table = CorrectionHistoryHashTable::new();
 
         for fen in bench_fens {
             let abort = AtomicBool::new(false);
             let pos = ChessState::from_fen(fen);
             tree.try_use_subtree(&pos, &None, 1);
-            let searcher = Searcher::new(pos, &tree, params, policy, value, &abort);
+            let searcher = Searcher::new(pos, &tree, &ch_table, params, policy, value, &abort);
             let timer = Instant::now();
             searcher.search(1, limits, false, &mut total_nodes);
             time += timer.elapsed().as_secs_f32();
@@ -251,6 +255,7 @@ fn position(commands: Vec<&str>, pos: &mut ChessState) {
 fn go(
     commands: &[&str],
     tree: &mut Tree,
+    ch_table: &mut CorrectionHistoryHashTable,
     prev: Option<ChessState>,
     pos: &ChessState,
     root_game_ply: u32,
@@ -334,7 +339,8 @@ fn go(
 
     std::thread::scope(|s| {
         s.spawn(|| {
-            let searcher = Searcher::new(pos.clone(), tree, params, policy, value, &abort);
+            let searcher =
+                Searcher::new(pos.clone(), tree, ch_table, params, policy, value, &abort);
             let (mov, _) = searcher.search(threads, limits, true, &mut 0);
             println!("bestmove {}", pos.conv_mov_to_str(mov));
 

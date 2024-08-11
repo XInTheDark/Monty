@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HashEntry {
@@ -108,5 +108,83 @@ impl HashTable {
         self.table[idx as usize]
             .0
             .store(u32::from(entry), Ordering::Relaxed)
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct CorrectionHistoryEntry {
+    pub value: f32,
+    pub visits: u32,
+}
+
+impl CorrectionHistoryEntry {
+    pub fn new(value: f32) -> Self {
+        Self { value, visits: 0 }
+    }
+
+    pub fn delta(&self) -> f32 {
+        if self.visits == 0 {
+            0.0
+        } else {
+            self.value / (self.visits as f32)
+        }
+    }
+}
+
+struct CorrectionHistoryEntryInternal(AtomicU64);
+
+impl Clone for CorrectionHistoryEntryInternal {
+    fn clone(&self) -> Self {
+        Self(AtomicU64::new(self.0.load(Ordering::Relaxed)))
+    }
+}
+
+impl From<&CorrectionHistoryEntryInternal> for CorrectionHistoryEntry {
+    fn from(value: &CorrectionHistoryEntryInternal) -> Self {
+        unsafe { std::mem::transmute(value.0.load(Ordering::Relaxed)) }
+    }
+}
+
+impl From<CorrectionHistoryEntry> for u64 {
+    fn from(value: CorrectionHistoryEntry) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
+pub struct CorrectionHistoryHashTable {
+    table: Vec<CorrectionHistoryEntryInternal>,
+}
+
+const CORRECTION_HISTORY_SIZE: u64 = 16384;
+
+impl CorrectionHistoryHashTable {
+    pub fn new() -> Self {
+        let table = vec![
+            CorrectionHistoryEntryInternal(AtomicU64::new(0));
+            CORRECTION_HISTORY_SIZE as usize
+        ];
+        CorrectionHistoryHashTable { table }
+    }
+
+    pub fn get(&self, key: u64) -> CorrectionHistoryEntry {
+        let index = (key % CORRECTION_HISTORY_SIZE) as usize;
+        CorrectionHistoryEntry::from(&self.table[index])
+    }
+
+    pub fn set(&self, key: u64, e: CorrectionHistoryEntry) {
+        let index = (key % CORRECTION_HISTORY_SIZE) as usize;
+        self.table[index].0.store(u64::from(e), Ordering::Relaxed);
+    }
+
+    // pub fn add(&mut self, key: u32, e: CorrectionHistoryEntry) {
+    //     let index = key as usize % CORRECTION_HISTORY_SIZE as usize;
+    //     let bonus = e.value.clamp(-CORRECTION_HISTORY_LIMIT, CORRECTION_HISTORY_LIMIT);
+    //     self.table[index].value += bonus - self.table[index].value.abs() / CORRECTION_HISTORY_LIMIT;
+    // }
+
+    pub fn clear(&mut self) {
+        for entry in self.table.iter_mut() {
+            entry.0.store(0, Ordering::Relaxed);
+        }
     }
 }

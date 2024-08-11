@@ -1,13 +1,13 @@
 mod edge;
 mod half;
-mod hash;
+pub mod hash;
 mod node;
 mod ptr;
 mod stats;
 
 pub use edge::Edge;
 use half::TreeHalf;
-use hash::{HashEntry, HashTable};
+use hash::{CorrectionHistoryEntry, CorrectionHistoryHashTable, HashEntry, HashTable};
 pub use node::Node;
 pub use ptr::NodePtr;
 pub use stats::ActionStats;
@@ -166,10 +166,18 @@ impl Tree {
         self[ptr].actions()[action].clone()
     }
 
-    pub fn update_edge_stats(&self, ptr: NodePtr, action: usize, result: f32) -> f32 {
+    pub fn update_edge_stats(
+        &self,
+        ptr: NodePtr,
+        action: usize,
+        result: f32,
+        ch_hash: u64,
+        ch_entry: CorrectionHistoryEntry,
+        ch_table: &CorrectionHistoryHashTable,
+    ) -> f32 {
         let actions = &self[ptr].actions();
         let edge = &actions[action];
-        edge.update(result);
+        edge.update(result, ch_hash, ch_entry, ch_table);
         edge.q()
     }
 

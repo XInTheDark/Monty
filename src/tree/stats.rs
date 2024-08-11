@@ -1,3 +1,4 @@
+use crate::tree::hash::{CorrectionHistoryEntry, CorrectionHistoryHashTable};
 use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 
 #[derive(Debug)]
@@ -59,6 +60,20 @@ impl ActionStats {
             .store((q * f64::from(u32::MAX)) as u32, Ordering::Relaxed);
         self.sq_q
             .store((sq_q * f64::from(u32::MAX)) as u32, Ordering::Relaxed);
+    }
+
+    pub fn update_with_correction_history(
+        &self,
+        result: f32,
+        hash: u64,
+        entry: CorrectionHistoryEntry,
+        ch_table: &CorrectionHistoryHashTable,
+    ) {
+        // update correction history
+        let value = entry.value + self.q() - result;
+        let visits = entry.visits + 1;
+        ch_table.set(hash, CorrectionHistoryEntry { value, visits });
+        self.update(result);
     }
 
     pub fn clear(&self) {

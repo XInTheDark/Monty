@@ -1,3 +1,4 @@
+use crate::tree::hash::{CorrectionHistoryEntry, CorrectionHistoryHashTable};
 use std::sync::atomic::{AtomicI16, AtomicU16, AtomicU32, Ordering};
 
 use super::{ActionStats, NodePtr};
@@ -86,7 +87,14 @@ impl Edge {
             .store((policy * f32::from(i16::MAX)) as i16, Ordering::Relaxed)
     }
 
-    pub fn update(&self, result: f32) {
-        self.stats.update(result);
+    pub fn update(
+        &self,
+        result: f32,
+        ch_hash: u64,
+        ch_entry: CorrectionHistoryEntry,
+        ch_table: &CorrectionHistoryHashTable,
+    ) {
+        self.stats
+            .update_with_correction_history(result, ch_hash, ch_entry, ch_table);
     }
 }

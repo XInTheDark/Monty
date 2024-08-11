@@ -6,6 +6,7 @@ pub use params::MctsParams;
 
 use crate::{
     chess::Move,
+    tree::hash::CorrectionHistoryHashTable,
     tree::{ActionStats, Edge, NodePtr, Tree},
     ChessState, GameState, PolicyNetwork, ValueNetwork,
 };
@@ -27,6 +28,7 @@ pub struct Limits {
 pub struct Searcher<'a> {
     root_position: ChessState,
     tree: &'a Tree,
+    ch_table: &'a CorrectionHistoryHashTable,
     params: &'a MctsParams,
     policy: &'a PolicyNetwork,
     value: &'a ValueNetwork,
@@ -37,6 +39,7 @@ impl<'a> Searcher<'a> {
     pub fn new(
         root_position: ChessState,
         tree: &'a Tree,
+        ch_table: &'a CorrectionHistoryHashTable,
         params: &'a MctsParams,
         policy: &'a PolicyNetwork,
         value: &'a ValueNetwork,
@@ -45,6 +48,7 @@ impl<'a> Searcher<'a> {
         Self {
             root_position,
             tree,
+            ch_table,
             params,
             policy,
             value,
@@ -316,9 +320,19 @@ impl<'a> Searcher<'a> {
 
             self.tree[child_ptr].dec_threads();
 
-            let u = maybe_u?;
+            let mut u = maybe_u?;
 
-            let new_q = self.tree.update_edge_stats(ptr, action, u);
+            let ch_hash = pos.ch_hash();
+            let ch_entry = self.ch_table.get(ch_hash);
+
+            // apply correction history
+            let ch_delta = ch_entry.delta();
+            u = u - ch_delta * 0.3;
+
+            let new_q =
+                self.tree
+                    .update_edge_stats(ptr, action, u, ch_hash, ch_entry, &self.ch_table);
+
             self.tree.push_hash(hash, new_q);
 
             child_state = self.tree[child_ptr].state();

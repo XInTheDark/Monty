@@ -65,6 +65,7 @@ impl Uci {
                 "go" => {
                     // increment game ply every time `go` is called
                     root_game_ply += 2;
+                    ch_table.clear();
 
                     go(
                         &commands,

@@ -48,11 +48,18 @@ impl ActionStats {
         (self.sq_q() - self.q64().powi(2)).max(0.0) as f32
     }
 
-    pub fn update(&self, result: f32) {
-        let r = f64::from(result);
+    pub fn update(&self, result: f32, adjust: bool) {
+        let mut r = f64::from(result);
         let v = f64::from(self.visits.fetch_add(1, Ordering::Relaxed));
 
-        let q = (self.q64() * v + r) / (v + 1.0);
+        let curr_q = self.q64();
+        let diff = r - curr_q;
+        if adjust && diff < 0.0 {
+            r -= diff * 0.1;
+            r = r.clamp(0.0, 1.0);
+        }
+
+        let q = (curr_q * v + r) / (v + 1.0);
         let sq_q = (self.sq_q() * v + r.powi(2)) / (v + 1.0);
 
         self.q

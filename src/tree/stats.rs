@@ -54,7 +54,7 @@ impl ActionStats {
 
         let curr_q = self.q64();
         let diff = r - curr_q;
-        if adjust && diff < 0.0 {
+        if adjust {
             r += diff * 0.1;
             r = r.clamp(0.0, 1.0);
         }

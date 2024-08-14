@@ -110,7 +110,7 @@ impl<'a> Searcher<'a> {
                 self.tree.root_stats(),
                 &mut this_depth,
             ) {
-                self.tree.root_stats().update(u);
+                self.tree.root_stats().update(u, false);
             } else {
                 return false;
             }

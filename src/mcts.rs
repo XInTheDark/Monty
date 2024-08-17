@@ -28,7 +28,7 @@ pub struct Limits {
 pub struct SearchStats {
     pub total_nodes: AtomicUsize,
     pub total_iters: AtomicUsize,
-    pub main_iters: AtomicUsize,
+    pub main_nodes: AtomicUsize,
     pub avg_depth: AtomicUsize,
 }
 
@@ -124,7 +124,7 @@ impl<'a> Searcher<'a> {
                 .total_nodes
                 .fetch_add(this_depth, Ordering::Relaxed);
             if main_thread {
-                search_stats.main_iters.fetch_add(1, Ordering::Relaxed);
+                search_stats.main_nodes.fetch_add(this_depth, Ordering::Relaxed);
             }
 
             // proven checkmate
@@ -156,14 +156,14 @@ impl<'a> Searcher<'a> {
         prev_time_remaining: &mut u128,
         #[cfg(not(feature = "uci-minimal"))] uci_output: bool,
     ) -> bool {
-        let iters = search_stats.main_iters.load(Ordering::Relaxed);
+        let iters = search_stats.main_nodes.load(Ordering::Relaxed);
 
         if search_stats.total_iters.load(Ordering::Relaxed) >= limits.max_nodes {
             return true;
         }
 
-        // Assume each iteration can take 8ms
-        if iters - *prev_iterations as usize > (*prev_time_remaining / 32) as usize {
+        // Assume each 'node' can take 1ms
+        if iters - *prev_iterations as usize > *prev_time_remaining as usize {
             if let Some(time) = limits.max_time {
                 let time_elapsed = timer.elapsed().as_millis();
                 if time_elapsed >= time {
@@ -175,7 +175,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        if iters % 128 == 0 {
+        if iters % 1024 == 0 {
             let new_best_move = self.get_best_move();
             if new_best_move != *best_move {
                 *best_move = new_best_move;
@@ -183,7 +183,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        if iters % 4096 == 0 {
+        if iters % 32768 == 0 {
             // Time management
             if let Some(time) = limits.opt_time {
                 let (should_stop, score) = SearchHelpers::soft_time_cutoff(
@@ -199,7 +199,7 @@ impl<'a> Searcher<'a> {
                     return true;
                 }
 
-                if iters % 16384 == 0 {
+                if iters % 131072 == 0 {
                     *best_move_changes = 0;
                 }
 

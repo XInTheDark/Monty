@@ -155,7 +155,7 @@ impl<'a> Searcher<'a> {
             return true;
         }
 
-        if iters % 256 == 0 {
+        if iters % 128 == 0 {
             if let Some(time) = limits.max_time {
                 if timer.elapsed().as_millis() >= time {
                     return true;
@@ -169,7 +169,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        if iters % 8192 == 0 {
+        if iters % 16384 == 0 {
             // Time management
             if let Some(time) = limits.opt_time {
                 let (should_stop, score) = SearchHelpers::soft_time_cutoff(
@@ -185,7 +185,7 @@ impl<'a> Searcher<'a> {
                     return true;
                 }
 
-                if iters % 32768 == 0 {
+                if iters % 65536 == 0 {
                     *best_move_changes = 0;
                 }
 

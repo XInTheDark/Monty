@@ -69,6 +69,8 @@ impl<'a> Searcher<'a> {
         best_move: &mut Move,
         best_move_changes: &mut i32,
         previous_score: &mut f32,
+        prev_iterations: &mut i32,
+        prev_time_remaining: &mut u128,    
         #[cfg(not(feature = "uci-minimal"))] uci_output: bool,
     ) {
         if self.playout_until_full_internal(search_stats, true, || {
@@ -79,6 +81,8 @@ impl<'a> Searcher<'a> {
                 best_move,
                 best_move_changes,
                 previous_score,
+                prev_iterations,
+                prev_time_remaining,                
                 #[cfg(not(feature = "uci-minimal"))]
                 uci_output,
             )
@@ -148,6 +152,8 @@ impl<'a> Searcher<'a> {
         best_move: &mut Move,
         best_move_changes: &mut i32,
         previous_score: &mut f32,
+        prev_iterations: &mut i32,
+        prev_time_remaining: &mut u128,
         #[cfg(not(feature = "uci-minimal"))] uci_output: bool,
     ) -> bool {
         let iters = search_stats.main_iters.load(Ordering::Relaxed);
@@ -156,10 +162,15 @@ impl<'a> Searcher<'a> {
             return true;
         }
 
-        if iters % 16 == 0 {
+        // Assume each iteration can take 1ms
+        if iters - *prev_iterations as usize > *prev_time_remaining as usize {
             if let Some(time) = limits.max_time {
-                if timer.elapsed().as_millis() >= time {
+                let time_elapsed = timer.elapsed().as_millis();
+                if time_elapsed >= time {
                     return true;
+                } else {
+                    *prev_time_remaining = time - time_elapsed;
+                    *prev_iterations = iters as i32;
                 }
             }
         }
@@ -232,6 +243,10 @@ impl<'a> Searcher<'a> {
     ) -> (Move, f32) {
         let timer = Instant::now();
 
+        // Initialize variables at the start of the search
+        let mut prev_iterations = 0;
+        let mut prev_time_remaining = limits.max_time.unwrap_or_default() as u128; // Initialize with max_time or 0 if None
+
         // attempt to reuse the current tree stored in memory
         let node = self.tree.root_node();
 
@@ -259,6 +274,8 @@ impl<'a> Searcher<'a> {
                         &mut best_move,
                         &mut best_move_changes,
                         &mut previous_score,
+                        &mut prev_iterations,
+                        &mut prev_time_remaining,   
                         #[cfg(not(feature = "uci-minimal"))]
                         uci_output,
                     );

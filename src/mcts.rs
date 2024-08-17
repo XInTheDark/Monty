@@ -156,13 +156,15 @@ impl<'a> Searcher<'a> {
             return true;
         }
 
-        if iters % 8 == 0 {
+        if iters % 16 == 0 {
             if let Some(time) = limits.max_time {
                 if timer.elapsed().as_millis() >= time {
                     return true;
                 }
             }
+        }
 
+        if iters % 128 == 0 {
             let new_best_move = self.get_best_move();
             if new_best_move != *best_move {
                 *best_move = new_best_move;

@@ -29,6 +29,7 @@ pub struct SearchStats {
     pub total_nodes: AtomicUsize,
     pub total_iters: AtomicUsize,
     pub main_iters: AtomicUsize,
+    pub main_nodes: AtomicUsize,
     pub avg_depth: AtomicUsize,
 }
 
@@ -125,6 +126,7 @@ impl<'a> Searcher<'a> {
                 .fetch_add(this_depth, Ordering::Relaxed);
             if main_thread {
                 search_stats.main_iters.fetch_add(1, Ordering::Relaxed);
+                search_stats.main_nodes.fetch_add(this_depth, Ordering::Relaxed);
             }
 
             // proven checkmate
@@ -157,20 +159,21 @@ impl<'a> Searcher<'a> {
         #[cfg(not(feature = "uci-minimal"))] uci_output: bool,
     ) -> bool {
         let iters = search_stats.main_iters.load(Ordering::Relaxed);
+        let tm_nodes = search_stats.main_nodes.load(Ordering::Relaxed);
 
         if search_stats.total_iters.load(Ordering::Relaxed) >= limits.max_nodes {
             return true;
         }
 
         // Assume each iteration can take 8ms
-        if iters - *prev_iterations as usize > (*prev_time_remaining / 32) as usize {
+        if tm_nodes - *prev_iterations as usize > *prev_time_remaining as usize {
             if let Some(time) = limits.max_time {
                 let time_elapsed = timer.elapsed().as_millis();
                 if time_elapsed >= time {
                     return true;
                 } else {
                     *prev_time_remaining = time - time_elapsed;
-                    *prev_iterations = iters as i32;
+                    *prev_iterations = tm_nodes as i32;
                 }
             }
         }

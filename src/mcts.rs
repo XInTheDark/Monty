@@ -109,6 +109,8 @@ impl<'a> Searcher<'a> {
                 self.tree.root_node(),
                 self.tree.root_stats(),
                 &mut this_depth,
+                main_thread,
+                search_stats,
             ) {
                 self.tree.root_stats().update(u);
             } else {
@@ -119,9 +121,6 @@ impl<'a> Searcher<'a> {
             search_stats
                 .total_nodes
                 .fetch_add(this_depth, Ordering::Relaxed);
-            if main_thread {
-                search_stats.main_nodes.fetch_add(this_depth, Ordering::Relaxed);
-            }
 
             // proven checkmate
             if self.tree[self.tree.root_node()].is_terminal() {
@@ -292,8 +291,13 @@ impl<'a> Searcher<'a> {
         ptr: NodePtr,
         node_stats: &ActionStats,
         depth: &mut usize,
+        main_thread: bool,
+        search_stats: &SearchStats,
     ) -> Option<f32> {
         *depth += 1;
+        if main_thread {
+            search_stats.main_nodes.fetch_add(1, Ordering::Relaxed);
+        }
 
         let hash = pos.hash();
 
@@ -327,7 +331,7 @@ impl<'a> Searcher<'a> {
 
             self.tree[child_ptr].inc_threads();
 
-            let maybe_u = self.perform_one_iteration(pos, child_ptr, &edge.stats(), depth);
+            let maybe_u = self.perform_one_iteration(pos, child_ptr, &edge.stats(), depth, main_thread, search_stats);
 
             self.tree[child_ptr].dec_threads();
 

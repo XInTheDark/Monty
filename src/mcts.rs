@@ -170,7 +170,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        if iters % 256 == 0 {
+        if iters % 4096 == 0 {
             // Time management
             if let Some(time) = limits.opt_time {
                 let (should_stop, score) = SearchHelpers::soft_time_cutoff(

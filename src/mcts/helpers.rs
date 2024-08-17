@@ -124,6 +124,8 @@ impl SearchHelpers {
             let max_time =
                 (max_scale * opt_time as f64).min(time as f64 * params.tm_max_time()) as u128;
 
+            println!("info string opt_time: {}, max_time: {}", opt_time, max_time);
+
             (opt_time, max_time)
         }
     }

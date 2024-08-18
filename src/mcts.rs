@@ -481,6 +481,21 @@ impl<'a> Searcher<'a> {
                 search_stats
                     .max_value_amt
                     .fetch_max(elapsed as u64, Ordering::Relaxed);
+
+                if elapsed > 1000 {
+                    // write elapsed to the file debug.txt
+
+                    let _ = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .open("debug.txt");
+
+                    let mut f = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open("debug.txt")
+                        .unwrap();
+                    write!(f, "VALUE elapsed: {}, pos: {}\n", elapsed, pos.board.as_fen()).unwrap();
+                }
                 x
             }
             GameState::Draw => 0.5,

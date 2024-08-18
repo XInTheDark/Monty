@@ -99,6 +99,7 @@ impl Uci {
                     println!("wdl: {:.2}%", 100.0 * pos.get_value_wdl(value, &params));
                 }
                 "policy" => {
+                    let time = Instant::now();
                     let f = pos.get_policy_feats();
                     let mut max = f32::NEG_INFINITY;
                     let mut moves = Vec::new();
@@ -123,9 +124,11 @@ impl Uci {
 
                     moves.sort_by_key(|(_, p)| (p * 1000.0) as u32);
 
+                    let elapsed = time.elapsed().as_micros();
                     for (s, p) in moves {
                         println!("{s} -> {:.2}%", p / total * 100.0);
                     }
+                    println!("Time: {}", elapsed);
                 }
                 "tree" => {
                     let depth = commands.get(1).unwrap_or(&"5").parse().unwrap_or(5);

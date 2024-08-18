@@ -27,7 +27,7 @@ impl Uci {
         let mut tree = Tree::new_mb(64, 1);
         let mut report_moves = false;
         let mut threads = 1;
-        let mut move_overhead = 40;
+        let mut move_overhead = 10;
 
         let mut stored_message: Option<String> = None;
 

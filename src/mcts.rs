@@ -15,6 +15,7 @@ use std::{
     thread,
     time::Instant,
 };
+use std::sync::atomic::AtomicU64;
 
 #[derive(Clone, Copy)]
 pub struct Limits {
@@ -31,6 +32,14 @@ pub struct SearchStats {
     pub main_iters: AtomicUsize,
     pub main_nodes: AtomicUsize,
     pub avg_depth: AtomicUsize,
+    pub total_amt: AtomicU64,
+    pub total_cnt: AtomicU64,
+    pub max_amt: AtomicU64,
+    pub sp_amt: AtomicU64,
+    pub total_iter_amt: AtomicU64,
+    pub max_iter_amt: AtomicU64,
+    pub sp_iter_amt: AtomicU64,
+    pub max_this_depth: AtomicUsize,
 }
 
 pub struct Searcher<'a> {
@@ -109,17 +118,20 @@ impl<'a> Searcher<'a> {
             let mut pos = self.root_position.clone();
             let mut this_depth = 0;
 
+            let time = Instant::now();
             if let Some(u) = self.perform_one_iteration(
                 &mut pos,
                 self.tree.root_node(),
                 self.tree.root_stats(),
                 &mut this_depth,
+                search_stats,
             ) {
                 self.tree.root_stats().update(u);
             } else {
                 return false;
             }
 
+            let elapsed = time.elapsed().as_micros();
             search_stats.total_iters.fetch_add(1, Ordering::Relaxed);
             search_stats
                 .total_nodes
@@ -128,6 +140,10 @@ impl<'a> Searcher<'a> {
                 search_stats.main_iters.fetch_add(1, Ordering::Relaxed);
                 search_stats.main_nodes.fetch_add(this_depth, Ordering::Relaxed);
             }
+            search_stats.max_this_depth.fetch_max(this_depth, Ordering::Relaxed);
+            search_stats.total_iter_amt.fetch_add(elapsed as u64, Ordering::Relaxed);
+            search_stats.max_iter_amt.fetch_max(elapsed as u64, Ordering::Relaxed);
+            search_stats.sp_iter_amt.fetch_add((elapsed > 1000) as u64, Ordering::Relaxed);
 
             // proven checkmate
             if self.tree[self.tree.root_node()].is_terminal() {
@@ -167,9 +183,43 @@ impl<'a> Searcher<'a> {
 
         // Assume each iteration can take 8ms
         if tm_nodes - *prev_iterations as usize > (*prev_time_remaining / 4) as usize {
+
+            // output the search stats: total_iter_amt, max_iter_amt, sp_iter_amt
+            if (search_stats.total_iters.load(Ordering::Relaxed) % 32) == 0 {
+                println!(
+                        "iters: {}, Total iter time: {} Max iter time: {}, iter amt > threshold: {}, max depth: {}",
+                        search_stats.total_iters.load(Ordering::Relaxed),
+                        search_stats.total_iter_amt.load(Ordering::Relaxed),
+                        search_stats.max_iter_amt.load(Ordering::Relaxed),
+                        search_stats.sp_iter_amt.load(Ordering::Relaxed),
+                        search_stats.max_this_depth.load(Ordering::Relaxed)
+                    );
+                println!(
+                        "Total policy time: {} Total count: {} Max time: {}, amt > threshold: {}",
+                        search_stats.total_amt.load(Ordering::Relaxed),
+                        search_stats.total_cnt.load(Ordering::Relaxed),
+                        search_stats.max_amt.load(Ordering::Relaxed),
+                        search_stats.sp_amt.load(Ordering::Relaxed)
+                    );
+            }
             if let Some(time) = limits.max_time {
                 let time_elapsed = timer.elapsed().as_millis();
                 if time_elapsed >= time {
+                    println!(
+                        "STOPPING iters: {}, Total iter time: {} Max iter time: {}, iter amt > threshold: {}, max depth: {}",
+                        search_stats.total_iters.load(Ordering::Relaxed),
+                        search_stats.total_iter_amt.load(Ordering::Relaxed),
+                        search_stats.max_iter_amt.load(Ordering::Relaxed),
+                        search_stats.sp_iter_amt.load(Ordering::Relaxed),
+                        search_stats.max_this_depth.load(Ordering::Relaxed)
+                    );
+                    println!(
+                        "STOPPING Total policy time: {} Total count: {} Max time: {}, amt > threshold: {}",
+                        search_stats.total_amt.load(Ordering::Relaxed),
+                        search_stats.total_cnt.load(Ordering::Relaxed),
+                        search_stats.max_amt.load(Ordering::Relaxed),
+                        search_stats.sp_amt.load(Ordering::Relaxed)
+                    );
                     return true;
                 } else {
                     *prev_time_remaining = time - time_elapsed;
@@ -314,6 +364,7 @@ impl<'a> Searcher<'a> {
         ptr: NodePtr,
         node_stats: &ActionStats,
         depth: &mut usize,
+        search_stats: &SearchStats,
     ) -> Option<f32> {
         *depth += 1;
 
@@ -335,7 +386,14 @@ impl<'a> Searcher<'a> {
         } else {
             // expand node on the second visit
             if self.tree[ptr].is_not_expanded() {
+                // time the amount of time spent expanding
+                let start = Instant::now();
                 self.tree[ptr].expand::<false>(pos, self.params, self.policy);
+                let elapsed = start.elapsed().as_micros();
+                search_stats.total_amt.fetch_add(elapsed as u64, Ordering::Relaxed);
+                search_stats.total_cnt.fetch_add(1, Ordering::Relaxed);
+                search_stats.max_amt.fetch_max(elapsed as u64, Ordering::Relaxed);
+                search_stats.sp_amt.fetch_add((elapsed > 1000) as u64, Ordering::Relaxed);
             }
 
             // select action to take via PUCT
@@ -349,7 +407,7 @@ impl<'a> Searcher<'a> {
 
             self.tree[child_ptr].inc_threads();
 
-            let maybe_u = self.perform_one_iteration(pos, child_ptr, &edge.stats(), depth);
+            let maybe_u = self.perform_one_iteration(pos, child_ptr, &edge.stats(), depth, search_stats);
 
             self.tree[child_ptr].dec_threads();
 

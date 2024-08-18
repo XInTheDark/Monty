@@ -58,7 +58,7 @@ impl std::fmt::Display for GameState {
 
 #[derive(Clone)]
 pub struct ChessState {
-    board: Board,
+    pub board: Board,
     castling: Castling,
     stack: Vec<u64>,
 }

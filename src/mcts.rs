@@ -4,6 +4,8 @@ mod params;
 pub use helpers::SearchHelpers;
 pub use params::MctsParams;
 
+use std::io::Write;
+
 use crate::{
     chess::Move,
     tree::{ActionStats, Edge, NodePtr, Tree},
@@ -419,6 +421,20 @@ impl<'a> Searcher<'a> {
                 search_stats
                     .max_policy_amt
                     .fetch_max(elapsed as u64, Ordering::Relaxed);
+                if elapsed > 1000 {
+                    // write elapsed to the file debug.txt
+
+                    let _ = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .open("debug.txt");
+
+                    let mut f = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open("debug.txt")
+                        .unwrap();
+                    write!(f, "elapsed: {}, pos: {}\n", elapsed, pos.board.as_fen()).unwrap();
+                }
             }
 
             // select action to take via PUCT

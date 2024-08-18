@@ -95,8 +95,11 @@ impl Uci {
                 "perft" => run_perft(&commands, &pos),
                 "quit" => std::process::exit(0),
                 "eval" => {
+                    let time = Instant::now();
                     println!("cp: {}", pos.get_value(value, &params));
+                    let elapsed = time.elapsed().as_micros();
                     println!("wdl: {:.2}%", 100.0 * pos.get_value_wdl(value, &params));
+                    println!("Time: {}", elapsed);
                 }
                 "policy" => {
                     let time = Instant::now();

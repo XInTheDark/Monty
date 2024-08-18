@@ -483,18 +483,18 @@ impl<'a> Searcher<'a> {
                     .fetch_max(elapsed as u64, Ordering::Relaxed);
 
                 if elapsed > 1000 {
-                    // write elapsed to the file debug.txt
+                    // write elapsed to the file debug2.txt
 
                     let _ = std::fs::OpenOptions::new()
                         .create(true)
                         .write(true)
-                        .open("debug.txt");
+                        .open("debug2.txt");
 
                     let mut f = std::fs::OpenOptions::new()
                         .append(true)
-                        .open("debug.txt")
+                        .open("debug2.txt")
                         .unwrap();
-                    write!(f, "VALUE elapsed: {}, pos: {}\n", elapsed, pos.board.as_fen()).unwrap();
+                    write!(f, "elapsed: {}, pos: {}\n", elapsed, pos.board.as_fen()).unwrap();
                 }
                 x
             }

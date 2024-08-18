@@ -2,12 +2,14 @@ use std::sync::{
     atomic::{AtomicU16, AtomicU32, Ordering},
     RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
+use std::time::Instant;
 
 use crate::{
     chess::Move,
     tree::{Edge, NodePtr},
     ChessState, GameState, MctsParams, PolicyNetwork,
 };
+use crate::mcts::SearchStats;
 
 #[derive(Debug)]
 pub struct Node {
@@ -99,16 +101,25 @@ impl Node {
         pos: &ChessState,
         params: &MctsParams,
         policy: &PolicyNetwork,
+        search_stats: Option<&SearchStats>,
     ) {
+        let binding = SearchStats::default();
+        let search_stats = search_stats.unwrap_or(&binding);
         let mut actions = self.actions_mut();
 
         if actions.len() != 0 {
             return;
         }
 
+        let time = Instant::now();
         let feats = pos.get_policy_feats();
+        let elapsed = time.elapsed().as_micros();
+        search_stats.total_feats_time.fetch_add(elapsed as u64, Ordering::Relaxed);
+        search_stats.max_feats_time.fetch_max(elapsed as u64, Ordering::Relaxed);
+
         let mut max = f32::NEG_INFINITY;
 
+        let time = Instant::now();
         pos.map_legal_moves(|mov| {
             let policy = pos.get_policy(mov, &feats, policy);
 
@@ -120,6 +131,9 @@ impl Node {
             ));
             max = max.max(policy);
         });
+        let policy_nn_elapsed = time.elapsed().as_micros();
+        search_stats.total_policy_nn_time.fetch_add(policy_nn_elapsed as u64, Ordering::Relaxed);
+        search_stats.max_policy_nn_time.fetch_max(policy_nn_elapsed as u64, Ordering::Relaxed);
 
         let mut total = 0.0;
 

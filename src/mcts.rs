@@ -34,6 +34,10 @@ pub struct SearchStats {
     pub total_policy_time: AtomicU64,
     pub total_policy_cnt: AtomicU64,
     pub max_policy_amt: AtomicU64,
+    pub total_feats_time: AtomicU64,
+    pub max_feats_time: AtomicU64,
+    pub total_policy_nn_time: AtomicU64,
+    pub max_policy_nn_time: AtomicU64,
     pub total_value_time: AtomicU64,
     pub total_value_cnt: AtomicU64,
     pub max_value_amt: AtomicU64,
@@ -291,6 +295,16 @@ impl<'a> Searcher<'a> {
             search_stats.total_value_cnt.load(Ordering::Relaxed),
             search_stats.max_value_amt.load(Ordering::Relaxed),
         );
+        println!(
+            "Total feats time: {} Max feats time: {}",
+            search_stats.total_feats_time.load(Ordering::Relaxed),
+            search_stats.max_feats_time.load(Ordering::Relaxed),
+        );
+        println!(
+            "Total policy nn time: {} Max policy nn time: {}",
+            search_stats.total_policy_nn_time.load(Ordering::Relaxed),
+            search_stats.max_policy_nn_time.load(Ordering::Relaxed),
+        );
     }
 
     pub fn search(
@@ -313,7 +327,7 @@ impl<'a> Searcher<'a> {
         if self.tree[node].has_children() {
             self.tree[node].relabel_policy(&self.root_position, self.params, self.policy);
         } else {
-            self.tree[node].expand::<true>(&self.root_position, self.params, self.policy);
+            self.tree[node].expand::<true>(&self.root_position, self.params, self.policy, None);
         }
 
         let search_stats = SearchStats::default();
@@ -394,7 +408,7 @@ impl<'a> Searcher<'a> {
             if self.tree[ptr].is_not_expanded() {
                 // time the amount of time spent expanding
                 let start = Instant::now();
-                self.tree[ptr].expand::<false>(pos, self.params, self.policy);
+                self.tree[ptr].expand::<false>(pos, self.params, self.policy, Some(search_stats));
                 let elapsed = start.elapsed().as_micros();
                 search_stats
                     .total_policy_time

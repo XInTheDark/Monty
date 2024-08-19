@@ -423,13 +423,10 @@ impl<'a> Searcher<'a> {
                     .fetch_max(elapsed as u64, Ordering::Relaxed);
                 if elapsed > 1000 {
                     // write elapsed to the file debug.txt
-
-                    let _ = std::fs::OpenOptions::new()
+                    // create the file if it doesn't exist
+                    let mut f = std::fs::OpenOptions::new()
                         .create(true)
                         .write(true)
-                        .open("debug.txt");
-
-                    let mut f = std::fs::OpenOptions::new()
                         .append(true)
                         .open("debug.txt")
                         .unwrap();
@@ -485,12 +482,9 @@ impl<'a> Searcher<'a> {
                 if elapsed > 1000 {
                     // write elapsed to the file debug2.txt
 
-                    let _ = std::fs::OpenOptions::new()
+                    let mut f = std::fs::OpenOptions::new()
                         .create(true)
                         .write(true)
-                        .open("debug2.txt");
-
-                    let mut f = std::fs::OpenOptions::new()
                         .append(true)
                         .open("debug2.txt")
                         .unwrap();

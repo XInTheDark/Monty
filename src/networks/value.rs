@@ -31,9 +31,9 @@ impl ValueNetwork {
         let mut str = String::new();
         let mut time = Instant::now();
         let time2 = Instant::now();
-        let l2 = self.l1.forward(board);
+        let l2 = self.l1.forward(board, &mut str);
         str.push_str(&format!("l1: {}\n", time.elapsed().as_micros())); time = Instant::now();
-        let l3 = self.l2.forward_from_i16::<SCReLU>(&l2);
+        let l3 = self.l2.forward_from_i16::<SCReLU>(&l2, &mut str);
         str.push_str(&format!("l2: {}\n", time.elapsed().as_micros())); time = Instant::now();
         let l4 = self.l3.forward::<SCReLU>(&l3);
         str.push_str(&format!("l3: {}\n", time.elapsed().as_micros())); time = Instant::now();

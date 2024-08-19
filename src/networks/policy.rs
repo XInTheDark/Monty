@@ -1,3 +1,5 @@
+use std::time::Instant;
+use std::io::Write;
 use crate::{
     boxed_and_zeroed,
     chess::{Board, Move},
@@ -18,8 +20,25 @@ struct SubNet {
 
 impl SubNet {
     fn out(&self, feats: &[usize]) -> Accumulator<f32, 16> {
+        let mut time = Instant::now();
+        let time2 = Instant::now();
+        let mut str = String::new();
         let l2 = self.ft.forward_from_slice(feats);
-        self.l2.forward_from_i16::<ReLU>(&l2)
+        str.push_str(&format!("ft: {}\n", time.elapsed().as_micros())); time = Instant::now();
+        let x = self.l2.forward_from_i16::<ReLU>(&l2, &mut str);
+        str.push_str(&format!("l2: {}\n", time.elapsed().as_micros())); time = Instant::now();
+        if time2.elapsed().as_micros() > 1000 {
+            str = format!("Time: {}\n", time2.elapsed().as_micros()) + &str + "\n";
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open("debug5.txt")
+                .unwrap();
+
+            writeln!(file, "{}", str).unwrap();
+        }
+        x
     }
 }
 

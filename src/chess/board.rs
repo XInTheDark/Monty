@@ -1,3 +1,4 @@
+use std::time::Instant;
 use crate::{pop_lsb, GameState};
 
 use super::{
@@ -170,7 +171,8 @@ impl Board {
         }
     }
 
-    pub fn map_value_features<F: FnMut(usize)>(&self, mut f: F) {
+    pub fn map_value_features<F: FnMut(usize)>(&self, mut f: F, str: &mut String) {
+        let time = Instant::now();
         let flip = self.stm() == Side::BLACK;
         let hm = if self.king_index() % 8 > 3 { 7 } else { 0 };
 
@@ -206,7 +208,9 @@ impl Board {
                     feat += 768 * 2;
                 }
 
+                let time2 = Instant::now();
                 f(feat);
+                str.push_str(&format!("our value feat {}: {}\n", feat, time2.elapsed().as_micros()));
             }
 
             while opp_bb > 0 {
@@ -222,7 +226,9 @@ impl Board {
                     feat += 768 * 2;
                 }
 
+                let time2 = Instant::now();
                 f(feat);
+                str.push_str(&format!("their value feat {}: {}\n", feat, time2.elapsed().as_micros()));
             }
         }
     }

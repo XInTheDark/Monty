@@ -1,3 +1,4 @@
+use std::time::Instant;
 use crate::Board;
 
 use super::{accumulator::Accumulator, activation::Activation, QA};
@@ -9,10 +10,10 @@ pub struct Layer<T: Copy, const M: usize, const N: usize> {
 }
 
 impl<const M: usize, const N: usize> Layer<i16, M, N> {
-    pub fn forward(&self, board: &Board) -> Accumulator<i16, N> {
+    pub fn forward(&self, board: &Board, str: &mut String) -> Accumulator<i16, N> {
         let mut out = self.biases;
 
-        board.map_value_features(|feat| out.add(&self.weights[feat]));
+        board.map_value_features(|feat| out.add(&self.weights[feat]), str);
 
         out
     }
@@ -43,12 +44,23 @@ impl<const M: usize, const N: usize> Layer<f32, M, N> {
     pub fn forward_from_i16<T: Activation>(
         &self,
         inputs: &Accumulator<i16, M>,
+        str: &mut String,
     ) -> Accumulator<f32, N> {
         let mut fwd = self.biases;
 
         for (i, d) in inputs.0.iter().zip(self.weights.iter()) {
+            let time = Instant::now();
             let act = T::activate(f32::from(*i) / f32::from(QA));
+            let _act = time.elapsed().as_micros();
+            if _act > 5 {
+                str.push_str(&format!("act: {}\n", _act));
+            }
+
+            let time = Instant::now();
             fwd.madd(act, d);
+            if time.elapsed().as_micros() > 10 {
+                str.push_str(&format!("madd: {}\n", time.elapsed().as_micros()));
+            }
         }
 
         fwd

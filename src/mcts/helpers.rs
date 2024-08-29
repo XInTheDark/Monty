@@ -49,7 +49,7 @@ impl SearchHelpers {
             scale *= (0.679 - 1.634 * (gini + 0.001).ln()).min(2.1);
 
             let root_visits = root_stats.visits().max(1) as f32;
-            scale *= 0.3 * root_visits.ln().powf(0.5);
+            scale *= (0.4 * root_visits.ln().powf(0.5) - 0.4).max(0.0);
             scale
         }
 

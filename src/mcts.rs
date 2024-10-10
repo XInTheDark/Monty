@@ -392,6 +392,7 @@ impl<'a> Searcher<'a> {
 
         // Sampling
         let threshold = params.mcts_min_p() * values[0].1;
+        let top_k = params.mcts_top_k() as usize;
 
         let mut candidates = Vec::new();
         for (i, score) in values {
@@ -399,6 +400,9 @@ impl<'a> Searcher<'a> {
                 break;
             }
             candidates.push((i, score));
+            if candidates.len() >= top_k {
+                break;
+            }
         }
 
         SearchHelpers::normalize_pair(&mut candidates);

@@ -16,6 +16,8 @@ use std::{
     time::Instant,
 };
 
+use rand::{prelude::*, rngs::StdRng, SeedableRng};
+
 #[derive(Clone, Copy)]
 pub struct Limits {
     pub max_time: Option<u128>,
@@ -314,7 +316,7 @@ impl<'a> Searcher<'a> {
             }
 
             // select action to take via PUCT
-            let action = self.pick_action(ptr, node_stats);
+            let action = self.pick_action(ptr, node_stats, self.params);
 
             let edge = self.tree.edge_copy(ptr, action);
 
@@ -352,7 +354,7 @@ impl<'a> Searcher<'a> {
         }
     }
 
-    fn pick_action(&self, ptr: NodePtr, node_stats: &ActionStats) -> usize {
+    fn pick_action(&self, ptr: NodePtr, node_stats: &ActionStats, params: &MctsParams) -> usize {
         let is_root = ptr == self.tree.root_node();
 
         let cpuct = SearchHelpers::get_cpuct(self.params, node_stats, is_root);
@@ -362,7 +364,9 @@ impl<'a> Searcher<'a> {
 
         let expl = cpuct * expl_scale;
 
-        self.tree.get_best_child_by_key(ptr, |action| {
+        let mut values: Vec<(usize, f32)> = Vec::new();
+
+        for (i, action) in self.tree[ptr].actions().iter().enumerate() {
             let mut q = SearchHelpers::get_action_value(action, fpu);
 
             // virtual loss
@@ -376,9 +380,45 @@ impl<'a> Searcher<'a> {
             }
 
             let u = expl * action.policy() / (1 + action.visits()) as f32;
+            let score = q + u;
 
-            q + u
-        })
+            values.push((i, score));
+        }
+
+        // Sort based on score
+        values.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        // Sampling - use top_p
+        let top_p = params.mcts_top_p();
+        let mut sum = 0.0;
+
+        let mut candidates = Vec::new();
+        for (i, score) in values {
+            sum += score;
+            candidates.push((i, score));
+            if sum >= top_p {
+                break;
+            }
+        }
+
+        // Normalise
+        for (_, score) in &mut candidates {
+            *score /= sum;
+        }
+
+        // weighted random, must be deterministic
+        let mut rng = StdRng::seed_from_u64(ptr.idx() as u64);
+        let mut r = rng.random::<f32>();
+
+        for (i, score) in candidates {
+            if r < score {
+                return i;
+            }
+            r -= score;
+        }
+
+        assert!(false, "failed to pick action");
+        0
     }
 
     fn search_report(&self, depth: usize, timer: &Instant, nodes: usize) {

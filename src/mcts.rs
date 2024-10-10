@@ -385,6 +385,8 @@ impl<'a> Searcher<'a> {
             values.push((i, score));
         }
 
+        SearchHelpers::normalize_pair(&mut values);
+
         // Sort based on score
         values.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
@@ -401,10 +403,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        // Normalise
-        for (_, score) in &mut candidates {
-            *score /= sum;
-        }
+        SearchHelpers::normalize_pair(&mut candidates);
 
         // weighted random, must be deterministic
         let mut rng = StdRng::seed_from_u64(ptr.idx() as u64);

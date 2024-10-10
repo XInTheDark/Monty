@@ -76,6 +76,21 @@ impl SearchHelpers {
         }
     }
 
+    /// Normalize a vector to sum to 1.
+    pub fn normalize(values: &mut Vec<f32>) {
+        let sum: f32 = values.iter().sum();
+        for prob in values.iter_mut() {
+            *prob /= sum;
+        }
+    }
+
+    pub fn normalize_pair<T>(values: &mut [(T, f32)]) {
+        let sum: f32 = values.iter().map(|(_, prob)| *prob).sum();
+        for (_, prob) in values.iter_mut() {
+            *prob /= sum;
+        }
+    }
+
     /// Calculates the maximum allowed time usage for a search
     ///
     /// #### Note

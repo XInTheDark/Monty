@@ -392,6 +392,7 @@ impl<'a> Searcher<'a> {
 
         // Sampling - use top_p
         let top_p = params.mcts_top_p();
+        let top_k = params.mcts_top_k() as usize;
         let mut sum = 0.0;
 
         let mut candidates = Vec::new();
@@ -399,6 +400,9 @@ impl<'a> Searcher<'a> {
             sum += score;
             candidates.push((i, score));
             if sum >= top_p {
+                break;
+            }
+            if candidates.len() >= top_k {
                 break;
             }
         }

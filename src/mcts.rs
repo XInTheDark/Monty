@@ -390,17 +390,15 @@ impl<'a> Searcher<'a> {
         // Sort based on score
         values.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        // Sampling - use top_p
-        let top_p = params.mcts_top_p();
-        let mut sum = 0.0;
+        // Sampling
+        let threshold = params.mcts_min_p() * values[0].1;
 
         let mut candidates = Vec::new();
         for (i, score) in values {
-            sum += score;
-            candidates.push((i, score));
-            if sum >= top_p {
+            if score < threshold {
                 break;
             }
+            candidates.push((i, score));
         }
 
         SearchHelpers::normalize_pair(&mut candidates);

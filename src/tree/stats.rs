@@ -70,7 +70,8 @@ impl ActionStats {
         ch_table: &CorrectionHistoryHashTable,
     ) {
         // update correction history
-        let value = entry.value + self.q() - result;
+        let v = entry.visits as f32;
+        let value = (entry.value * v + (self.q() - result)) / (v + 1.0);
         let visits = entry.visits + 1;
         ch_table.set(hash, CorrectionHistoryEntry { value, visits });
         self.update(result);

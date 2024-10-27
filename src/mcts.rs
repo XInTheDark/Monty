@@ -319,10 +319,10 @@ impl<'a> Searcher<'a> {
                 if let Some(entry) = self.tree.probe_hash(hash) {
                     entry.q()
                 } else {
-                    self.get_utility(ptr, pos, Some(ch_entry))
+                    self.get_utility(ptr, pos, &self.params, Some(ch_entry))
                 }
             } else {
-                self.get_utility(ptr, pos, Some(ch_entry))
+                self.get_utility(ptr, pos, &self.params, Some(ch_entry))
             }
         } else {
             // expand node on the second visit
@@ -367,6 +367,7 @@ impl<'a> Searcher<'a> {
         &self,
         ptr: NodePtr,
         pos: &ChessState,
+        params: &MctsParams,
         ch_entry: Option<CorrectionHistoryEntry>,
     ) -> f32 {
         match self.tree[ptr].state() {
@@ -374,7 +375,7 @@ impl<'a> Searcher<'a> {
                 let mut u = pos.get_value_wdl(self.value, self.params);
                 if let Some(entry) = ch_entry {
                     let ch_delta = entry.delta();
-                    u = u - ch_delta * 0.3;
+                    u = u - ch_delta * params.correction_history_weight();
                     u = u.clamp(0.0, 1.0);
                 }
                 u

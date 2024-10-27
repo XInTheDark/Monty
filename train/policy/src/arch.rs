@@ -1,13 +1,50 @@
 use datagen::{PolicyData, Rand};
-use goober::{FeedForwardNetwork, OutputLayer, SparseVector, Vector};
-use monty::{Board, Move, PolicyNetwork, SubNet};
+use goober::{activation, layer, FeedForwardNetwork, Matrix, OutputLayer, SparseVector, Vector};
+use monty::{Board, Move};
 
-use crate::TrainablePolicy;
+use std::io::Write;
 
-impl TrainablePolicy for PolicyNetwork {
-    type Data = PolicyData;
+#[repr(C)]
+#[derive(Clone, Copy, FeedForwardNetwork)]
+pub struct SubNet {
+    ft: layer::SparseConnected<activation::ReLU, 768, 32>,
+    l2: layer::DenseConnected<activation::ReLU, 32, 32>,
+}
 
-    fn update(
+impl SubNet {
+    pub fn from_fn<F: FnMut() -> f32>(mut f: F) -> Self {
+        let matrix = Matrix::from_fn(|_, _| f());
+        let vector = Vector::from_fn(|_| f());
+
+        let matrix2 = Matrix::from_fn(|_, _| f());
+        let vector2 = Vector::from_fn(|_| f());
+
+        Self {
+            ft: layer::SparseConnected::from_raw(matrix, vector),
+            l2: layer::DenseConnected::from_raw(matrix2, vector2),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PolicyNetwork {
+    pub subnets: [[SubNet; 2]; 128],
+    pub hce: layer::DenseConnected<activation::Identity, 4, 1>,
+}
+
+impl PolicyNetwork {
+    pub fn get_hce_feats(_: &Board, mov: &Move) -> Vector<4> {
+        let mut feats = Vector::zeroed();
+
+        if mov.is_promo() {
+            feats[mov.promo_pc() - 3] = 1.0;
+        }
+
+        feats
+    }
+
+    pub fn update(
         policy: &mut Self,
         grad: &Self,
         adj: f32,
@@ -32,7 +69,7 @@ impl TrainablePolicy for PolicyNetwork {
             .adam(&grad.hce, &mut momentum.hce, &mut velocity.hce, adj, lr);
     }
 
-    fn update_single_grad(pos: &Self::Data, policy: &Self, grad: &mut Self, error: &mut f32) {
+    pub fn update_single_grad(pos: &PolicyData, policy: &Self, grad: &mut Self, error: &mut f32) {
         let board = Board::from(pos.pos);
 
         let mut feats = SparseVector::with_capacity(32);
@@ -48,10 +85,9 @@ impl TrainablePolicy for PolicyNetwork {
 
         for &(mov, visits) in &pos.moves[..pos.num] {
             let mov = <Move as From<u16>>::from(mov);
-            let pc = board.get_pc(1 << mov.src()) - 1;
 
             let from = usize::from(mov.src() ^ flip);
-            let to = 64 * pc + usize::from(mov.to() ^ flip);
+            let to = usize::from(mov.to() ^ flip) + 64;
             let from_threat = usize::from(threats & (1 << mov.src()) > 0);
             let good_see = usize::from(board.see(&mov, -108));
 
@@ -76,9 +112,8 @@ impl TrainablePolicy for PolicyNetwork {
         }
 
         for (from_out, to_out, hce_out, mov, visits, score, good_see) in policies {
-            let pc = board.get_pc(1 << mov.src()) - 1;
             let from = usize::from(mov.src() ^ flip);
-            let to = 64 * pc + usize::from(mov.to() ^ flip);
+            let to = usize::from(mov.to() ^ flip) + 64;
             let from_threat = usize::from(threats & (1 << mov.src()) > 0);
             let hce_feats = PolicyNetwork::get_hce_feats(&board, &mov);
 
@@ -114,7 +149,7 @@ impl TrainablePolicy for PolicyNetwork {
         }
     }
 
-    fn rand_init() -> Box<Self> {
+    pub fn rand_init() -> Box<Self> {
         let mut policy = Self::boxed_and_zeroed();
 
         let mut rng = Rand::with_seed();
@@ -127,7 +162,7 @@ impl TrainablePolicy for PolicyNetwork {
         policy
     }
 
-    fn add_without_explicit_lifetime(&mut self, rhs: &Self) {
+    pub fn add_without_explicit_lifetime(&mut self, rhs: &Self) {
         for (ipair, jpair) in self.subnets.iter_mut().zip(rhs.subnets.iter()) {
             for (i, j) in ipair.iter_mut().zip(jpair.iter()) {
                 *i += j;
@@ -135,5 +170,29 @@ impl TrainablePolicy for PolicyNetwork {
         }
 
         self.hce += &rhs.hce;
+    }
+
+    pub fn boxed_and_zeroed() -> Box<Self> {
+        unsafe {
+            let layout = std::alloc::Layout::new::<Self>();
+            let ptr = std::alloc::alloc_zeroed(layout);
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            Box::from_raw(ptr.cast())
+        }
+    }
+
+    pub fn write_to_bin(&self, path: &str) {
+        let size_of = std::mem::size_of::<Self>();
+
+        let mut file = std::fs::File::create(path).unwrap();
+
+        unsafe {
+            let ptr: *const Self = self;
+            let slice_ptr: *const u8 = std::mem::transmute(ptr);
+            let slice = std::slice::from_raw_parts(slice_ptr, size_of);
+            file.write_all(slice).unwrap();
+        }
     }
 }

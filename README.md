@@ -6,20 +6,15 @@
 </div>
 
 ## Compiling
-To compile without embedding the networks, run
+To compile, run
 ```
-make EXE=<output path>
+make
 ```
-when running the executable it will search for the networks in the current working directory.
-
-To compile and embed the networks in the exectuable, run
-```
-make embed EXE=<output path> EVALFILE=<value net path> POLICYFILE=<policy net path>
-```
+The required networks will be downloaded automatically (and validated).
 
 ## Development
 
-Development of Monty is facilitated by [montytest](https://montychess.org/tests).
+Development of Monty is facilitated by [montytest](https://tests.montychess.org/tests).
 If you want to contribute, it is recommended to look in:
 - [src/mcts/helpers.rs](src/mcts/helpers.rs) - location of functions that
 calculate many important search heuristics, e.g. CPUCT scaling

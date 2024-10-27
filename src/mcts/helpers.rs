@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crate::{
     mcts::{MctsParams, Searcher},
-    tree::{ActionStats, Edge},
+    tree::{ActionStats, Edge, Node},
 };
 
 pub struct SearchHelpers;
@@ -32,11 +32,28 @@ impl SearchHelpers {
         cpuct
     }
 
+    /// Base Exploration Scaling
+    ///
+    /// Larger value implies more exploration.
+    fn base_explore_scaling(params: &MctsParams, node_stats: &ActionStats) -> f32 {
+        (params.expl_tau() * (node_stats.visits().max(1) as f32).ln()).exp()
+    }
+
     /// Exploration Scaling
     ///
     /// Larger value implies more exploration.
-    pub fn get_explore_scaling(params: &MctsParams, node_stats: &ActionStats) -> f32 {
-        (params.expl_tau() * (node_stats.visits().max(1) as f32).ln()).exp()
+    pub fn get_explore_scaling(params: &MctsParams, node_stats: &ActionStats, _node: &Node) -> f32 {
+        #[cfg(not(feature = "datagen"))]
+        {
+            let mut scale = Self::base_explore_scaling(params, node_stats);
+
+            let gini = _node.gini_impurity();
+            scale *= (0.679 - 1.634 * (gini + 0.001).ln()).min(2.1);
+            scale
+        }
+
+        #[cfg(feature = "datagen")]
+        Self::base_explore_scaling(params, node_stats)
     }
 
     /// First Play Urgency

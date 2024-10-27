@@ -72,6 +72,7 @@ impl Tree {
         let t = &mut *self[to].actions_mut();
 
         self[to].set_state(self[from].state());
+        self[to].set_gini_impurity(self[from].gini_impurity());
 
         if f.is_empty() {
             return;
@@ -235,12 +236,7 @@ impl Tree {
         }
     }
 
-    pub fn try_use_subtree(
-        &mut self,
-        root: &ChessState,
-        prev_board: &Option<ChessState>,
-        threads: usize,
-    ) {
+    pub fn try_use_subtree(&mut self, root: &ChessState, prev_board: &Option<ChessState>) {
         let t = Instant::now();
 
         if self.is_empty() {
@@ -275,7 +271,6 @@ impl Tree {
         if !found {
             println!("info string no subtree found");
             self.clear_halves();
-            self.flip(false, threads);
             self.push_new(GameState::Ongoing).unwrap();
         }
 

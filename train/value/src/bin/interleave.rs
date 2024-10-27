@@ -3,11 +3,11 @@ use std::{
     io::{BufReader, BufWriter, Write},
 };
 
-use montyformat::MontyFormat;
+use datagen::Binpack;
 
 fn main() -> std::io::Result<()> {
-    let folder_path = "/home/neural/policy_data/64"; // Specify the folder to scan
-    let output = "interleaved.binpack";
+    let folder_path = "/home/admin/monty_value_data/4096"; // Specify the folder to scan
+    let output = "interleaved-value.binpack";
 
     // Scan the folder and collect file paths with the specified extension
     let inputs: Vec<String> = fs::read_dir(folder_path)?
@@ -59,7 +59,7 @@ fn main() -> std::io::Result<()> {
 
         let (count, reader) = &mut streams[idx];
 
-        MontyFormat::deserialise_fast_into_buffer(reader, &mut buffer)?;
+        Binpack::deserialise_fast_into_buffer(reader, &mut buffer)?;
         writer.write_all(&buffer)?;
 
         let size = buffer.len() as u64;

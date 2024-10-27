@@ -29,6 +29,7 @@ impl Uci {
         let mut ch_table = CorrectionHistoryHashTable::new();
         let mut report_moves = false;
         let mut threads = 1;
+        let mut move_overhead = 40;
 
         let mut stored_message: Option<String> = None;
 
@@ -60,6 +61,7 @@ impl Uci {
                     &mut report_moves,
                     &mut tree,
                     &mut threads,
+                    &mut move_overhead,
                 ),
                 "position" => position(commands, &mut pos),
                 "go" => {
@@ -78,10 +80,20 @@ impl Uci {
                         policy,
                         value,
                         threads,
+                        move_overhead,
                         &mut stored_message,
                     );
 
                     prev = Some(pos.clone());
+                }
+                "bench" => {
+                    let depth = if let Some(d) = commands.get(1) {
+                        d.parse().unwrap_or(ChessState::BENCH_DEPTH)
+                    } else {
+                        ChessState::BENCH_DEPTH
+                    };
+
+                    Uci::bench(depth, policy, value, &params);
                 }
                 "perft" => run_perft(&commands, &pos),
                 "quit" => std::process::exit(0),
@@ -112,7 +124,8 @@ impl Uci {
                         total += *p;
                     }
 
-                    moves.sort_by_key(|(_, p)| (p * 1000.0) as u32);
+                    // Sort the moves by probability in descending order.
+                    moves.sort_by(|(_, p1), (_, p2)| p2.partial_cmp(p1).unwrap());
 
                     for (s, p) in moves {
                         println!("{s} -> {:.2}%", p / total * 100.0);
@@ -154,7 +167,7 @@ impl Uci {
         for fen in bench_fens {
             let abort = AtomicBool::new(false);
             let pos = ChessState::from_fen(fen);
-            tree.try_use_subtree(&pos, &None, 1);
+            tree.try_use_subtree(&pos, &None);
             let searcher = Searcher::new(pos, &tree, &ch_table, params, policy, value, &abort);
             let timer = Instant::now();
             searcher.search(1, limits, false, &mut total_nodes);
@@ -174,6 +187,7 @@ fn preamble() {
     println!("id author Jamie Whiting");
     println!("option name Hash type spin default 64 min 1 max 8192");
     println!("option name Threads type spin default 1 min 1 max 512");
+    println!("option name MoveOverhead type spin default 40 min 0 max 5000");
     println!("option name report_moves type button");
     Uci::options();
 
@@ -189,6 +203,7 @@ fn setoption(
     report_moves: &mut bool,
     tree: &mut Tree,
     threads: &mut usize,
+    move_overhead: &mut usize,
 ) {
     if let ["setoption", "name", "report_moves"] = commands {
         *report_moves = !*report_moves;
@@ -202,6 +217,11 @@ fn setoption(
 
         if *x == "Threads" {
             *threads = y.parse().unwrap();
+            return;
+        }
+
+        if *x == "MoveOverhead" {
+            *move_overhead = y.parse().unwrap();
             return;
         }
 
@@ -265,6 +285,7 @@ fn go(
     policy: &PolicyNetwork,
     value: &ValueNetwork,
     threads: usize,
+    move_overhead: usize,
     stored_message: &mut Option<String>,
 ) {
     let mut max_nodes = i32::MAX as usize;
@@ -319,17 +340,17 @@ fn go(
         max_time = Some(max_time.unwrap_or(u128::MAX).min(max));
     }
 
-    // 20ms move overhead
+    // apply move overhead
     if let Some(t) = opt_time.as_mut() {
-        *t = t.saturating_sub(20);
+        *t = t.saturating_sub(move_overhead as u128);
     }
     if let Some(t) = max_time.as_mut() {
-        *t = t.saturating_sub(20);
+        *t = t.saturating_sub(move_overhead as u128);
     }
 
     let abort = AtomicBool::new(false);
 
-    tree.try_use_subtree(pos, &prev, threads);
+    tree.try_use_subtree(pos, &prev);
 
     let limits = Limits {
         max_time,

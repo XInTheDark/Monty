@@ -78,7 +78,7 @@ impl Default for ChessState {
 
 impl ChessState {
     pub const STARTPOS: &'static str = STARTPOS;
-    pub const BENCH_DEPTH: usize = 7;
+    pub const BENCH_DEPTH: usize = 6;
 
     pub fn bbs(&self) -> [u64; 8] {
         self.board.bbs()
@@ -144,8 +144,8 @@ impl ChessState {
         self.stm()
     }
 
-    pub fn get_policy_feats(&self) -> (goober::SparseVector, u64) {
-        let mut feats = goober::SparseVector::with_capacity(32);
+    pub fn get_policy_feats(&self) -> (Vec<usize>, u64) {
+        let mut feats = Vec::with_capacity(32);
         self.board.map_policy_features(|feat| feats.push(feat));
         (feats, self.board.threats())
     }
@@ -153,7 +153,7 @@ impl ChessState {
     pub fn get_policy(
         &self,
         mov: Move,
-        (feats, threats): &(goober::SparseVector, u64),
+        (feats, threats): &(Vec<usize>, u64),
         policy: &PolicyNetwork,
     ) -> f32 {
         policy.get(&self.board, &mov, feats, *threats)

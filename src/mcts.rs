@@ -6,7 +6,7 @@ pub use params::MctsParams;
 
 use crate::{
     chess::Move,
-    tree::hash::CorrectionHistoryHashTable,
+    tree::hash::{CorrectionHistoryHashTable, CorrectionHistoryEntry},
     tree::{ActionStats, Edge, NodePtr, Tree},
     ChessState, GameState, PolicyNetwork, ValueNetwork,
 };
@@ -310,16 +310,19 @@ impl<'a> Searcher<'a> {
 
         let hash = pos.hash();
 
+        let ch_hash = pos.ch_hash();
+        let ch_entry = self.ch_table.get(ch_hash);
+
         let u = if self.tree[ptr].is_terminal() || node_stats.visits() == 0 {
             // probe hash table to use in place of network
             if self.tree[ptr].state() == GameState::Ongoing {
                 if let Some(entry) = self.tree.probe_hash(hash) {
                     entry.q()
                 } else {
-                    self.get_utility(ptr, pos)
+                    self.get_utility(ptr, pos, Some(ch_entry))
                 }
             } else {
-                self.get_utility(ptr, pos)
+                self.get_utility(ptr, pos, Some(ch_entry))
             }
         } else {
             // expand node on the second visit
@@ -345,9 +348,6 @@ impl<'a> Searcher<'a> {
 
             let mut u = maybe_u?;
 
-            let ch_hash = pos.ch_hash();
-            let ch_entry = self.ch_table.get(ch_hash);
-
             let new_q =
                 self.tree
                     .update_edge_stats(ptr, action, u, ch_hash, ch_entry, &self.ch_table);
@@ -363,9 +363,17 @@ impl<'a> Searcher<'a> {
         Some(1.0 - u)
     }
 
-    fn get_utility(&self, ptr: NodePtr, pos: &ChessState) -> f32 {
+    fn get_utility(&self, ptr: NodePtr, pos: &ChessState, ch_entry: Option<CorrectionHistoryEntry>) -> f32 {
         match self.tree[ptr].state() {
-            GameState::Ongoing => pos.get_value_wdl(self.value, self.params),
+            GameState::Ongoing => {
+                let mut u = pos.get_value_wdl(self.value, self.params);
+                if let Some(entry) = ch_entry {
+                    let ch_delta = entry.delta();
+                    u = u - ch_delta * 0.3;
+                    u = u.clamp(0.0, 1.0);
+                }
+                u
+            },
             GameState::Draw => 0.5,
             GameState::Lost(_) => 0.0,
             GameState::Won(_) => 1.0,

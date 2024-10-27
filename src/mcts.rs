@@ -6,7 +6,7 @@ pub use params::MctsParams;
 
 use crate::{
     chess::Move,
-    tree::hash::{CorrectionHistoryHashTable, CorrectionHistoryEntry},
+    tree::hash::{CorrectionHistoryEntry, CorrectionHistoryHashTable},
     tree::{ActionStats, Edge, NodePtr, Tree},
     ChessState, GameState, PolicyNetwork, ValueNetwork,
 };
@@ -363,7 +363,12 @@ impl<'a> Searcher<'a> {
         Some(1.0 - u)
     }
 
-    fn get_utility(&self, ptr: NodePtr, pos: &ChessState, ch_entry: Option<CorrectionHistoryEntry>) -> f32 {
+    fn get_utility(
+        &self,
+        ptr: NodePtr,
+        pos: &ChessState,
+        ch_entry: Option<CorrectionHistoryEntry>,
+    ) -> f32 {
         match self.tree[ptr].state() {
             GameState::Ongoing => {
                 let mut u = pos.get_value_wdl(self.value, self.params);
@@ -373,7 +378,7 @@ impl<'a> Searcher<'a> {
                     u = u.clamp(0.0, 1.0);
                 }
                 u
-            },
+            }
             GameState::Draw => 0.5,
             GameState::Lost(_) => 0.0,
             GameState::Won(_) => 1.0,

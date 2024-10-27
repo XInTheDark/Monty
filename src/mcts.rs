@@ -348,11 +348,6 @@ impl<'a> Searcher<'a> {
             let ch_hash = pos.ch_hash();
             let ch_entry = self.ch_table.get(ch_hash);
 
-            // apply correction history
-            let ch_delta = ch_entry.delta();
-            u = u - ch_delta * 0.3;
-            u = u.clamp(0.0, 1.0);
-
             let new_q =
                 self.tree
                     .update_edge_stats(ptr, action, u, ch_hash, ch_entry, &self.ch_table);

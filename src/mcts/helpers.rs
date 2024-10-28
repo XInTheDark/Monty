@@ -181,7 +181,7 @@ impl SearchHelpers {
             .tree
             .get_children_by_key(searcher.tree.root_node(), |node| node.q());
         let gini = Self::gini_impurity(&move_values);
-        let gini_impurity = (1.421 + 1.634 * (gini + 0.001).ln()).max(0.7);
+        let gini_impurity = (1.500 + 2.000 * (gini + 0.001).ln()).max(0.75);
 
         let total_time =
             (time as f32 * falling_eval * best_move_instability * best_move_visits * gini_impurity)

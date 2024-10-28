@@ -76,6 +76,16 @@ impl SearchHelpers {
         }
     }
 
+    /// Calculates the Gini impurity of an array
+    ///
+    /// #### Note
+    /// Must return a value in [0, 1].
+    pub fn gini_impurity(values: &[f32]) -> f32 {
+        let total = values.iter().sum::<f32>();
+        let sum_of_squares = values.iter().map(|&x| (x / total).powi(2)).sum::<f32>();
+        (1.0 - sum_of_squares).clamp(0.0, 1.0)
+    }
+
     /// Calculates the maximum allowed time usage for a search
     ///
     /// #### Note
@@ -166,8 +176,16 @@ impl SearchHelpers {
                 * searcher.params.tm_bmv4())
         .clamp(searcher.params.tm_bmv5(), searcher.params.tm_bmv6());
 
+        // Use more time if the gini impurity of the move values is high
+        let move_values = searcher
+            .tree
+            .get_children_by_key(searcher.tree.root_node(), |node| node.q());
+        let gini = Self::gini_impurity(&move_values);
+        let gini_impurity = (1.421 + 1.634 * (gini + 0.001).ln()).max(0.5);
+
         let total_time =
-            (time as f32 * falling_eval * best_move_instability * best_move_visits) as u128;
+            (time as f32 * falling_eval * best_move_instability * best_move_visits * gini_impurity)
+                as u128;
 
         (elapsed >= total_time, score)
     }

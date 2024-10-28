@@ -370,15 +370,27 @@ impl Tree {
         NodePtr::NULL
     }
 
+    pub fn get_children_by_key<F: FnMut(&Node) -> f32>(
+        &self,
+        ptr: NodePtr,
+        mut key: F,
+    ) -> Vec<f32> {
+        let mut children = Vec::with_capacity(self[ptr].num_actions());
+        let first_child_ptr = { *self[ptr].actions() };
+
+        for action in 0..self[ptr].num_actions() {
+            children.push(key(&self[first_child_ptr + action]));
+        }
+
+        children
+    }
+
     pub fn get_best_child_by_key<F: FnMut(&Node) -> f32>(&self, ptr: NodePtr, mut key: F) -> usize {
         let mut best_child = usize::MAX;
         let mut best_score = f32::NEG_INFINITY;
 
-        let first_child_ptr = { *self[ptr].actions() };
-
-        for action in 0..self[ptr].num_actions() {
-            let score = key(&self[first_child_ptr + action]);
-
+        let children = self.get_children_by_key(ptr, &mut key);
+        for (action, &score) in children.iter().enumerate() {
             if score > best_score {
                 best_score = score;
                 best_child = action;

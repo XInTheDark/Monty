@@ -147,18 +147,27 @@ impl SearchHelpers {
     ) -> (bool, f32) {
         let elapsed = timer.elapsed().as_millis();
 
-        // Use more time if our eval is falling, and vice versa
+        // Use more time if our eval is falling, or if there is a sudden increase in eval
         let (_, mut score) = searcher.get_pv(0);
         score = Searcher::get_cp(score);
         let eval_diff = if previous_score == f32::NEG_INFINITY {
             0.0
         } else {
-            previous_score - score
+            score - previous_score
         };
-        let falling_eval = (1.0 + eval_diff * searcher.params.tm_falling_eval1()).clamp(
-            searcher.params.tm_falling_eval2(),
-            searcher.params.tm_falling_eval3(),
-        );
+        let falling_eval = if eval_diff < 0.0 {
+            (1.0 - eval_diff * searcher.params.tm_falling_eval1()).clamp(
+                searcher.params.tm_falling_eval2(),
+                searcher.params.tm_falling_eval3(),
+            )
+        } else {
+            (1.0 + eval_diff * eval_diff * searcher.params.tm_falling_eval4()
+                - eval_diff * searcher.params.tm_falling_eval5())
+            .clamp(
+                searcher.params.tm_falling_eval6(),
+                searcher.params.tm_falling_eval7(),
+            )
+        };
 
         // Use more time if our best move is changing frequently
         let best_move_instability = (1.0

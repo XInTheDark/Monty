@@ -76,7 +76,7 @@ pub fn perform_one(
         // Update correction history.
         if let Some(corrhist_table) = searcher.corrhist_table {
             let old_q = node.q();
-            let multiweight = 1.0 / (1 + node.visits()) as f32;
+            let multiweight = 1.0; // simple weight for now
             let delta = (old_q - u) * multiweight;
 
             let ch_hash = pos.ch_hash();

@@ -98,7 +98,7 @@ impl SearchHelpers {
         let avg_delta = entry.delta();
         // TODO: minus or add?
         let corrected_q = original_q - params.correction_history_lambda() * avg_delta;
-        corrected_q.clamp(0.0, 1.0)
+        corrected_q.clamp(-1.0, 1.0)
     }
 
     /// Calculates the maximum allowed time usage for a search

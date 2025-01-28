@@ -146,7 +146,7 @@ make_mcts_params! {
     gini_ln_multiplier: f32 = 1.567, 0.4, 3.0, 0.1634, 0.002;
     gini_min: f32 = 2.26, 0.5, 4.0, 0.21, 0.002;
     correction_history_alpha: f32 = 1.0, 0.1, 2.0, 0.1, 0.002;
-    correction_history_lambda: f32 = 0.3, 0.1, 1.0, 0.05, 0.002;
+    correction_history_lambda: f32 = -0.1, 0.1, 1.0, 0.05, 0.002;
     knight_value: i32 = 437, 250, 750, 25, 0.002;
     bishop_value: i32 = 409, 250, 750, 25, 0.002;
     rook_value: i32 = 768, 400, 1000, 30, 0.002;

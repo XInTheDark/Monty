@@ -395,6 +395,7 @@ impl Board {
         a ^ (0x299799adf0d95defu64 + self.internal_hash(b) + (a << 6) + (a >> 2))
     }
 
+    // get correction history hash
     pub fn ch_hash(&self) -> u64 {
         self.hash_cat(
             self.bb[Side::WHITE] & self.bb[Piece::PAWN],

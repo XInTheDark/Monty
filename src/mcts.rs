@@ -1,3 +1,4 @@
+pub(crate) mod corrhist;
 mod helpers;
 mod iteration;
 mod params;
@@ -40,6 +41,7 @@ pub struct Searcher<'a> {
     policy: &'a PolicyNetwork,
     value: &'a ValueNetwork,
     abort: &'a AtomicBool,
+    corrhist_table: Option<&'a corrhist::CorrHistTable>,
 }
 
 impl<'a> Searcher<'a> {
@@ -49,6 +51,7 @@ impl<'a> Searcher<'a> {
         policy: &'a PolicyNetwork,
         value: &'a ValueNetwork,
         abort: &'a AtomicBool,
+        corrhist_table: Option<&'a corrhist::CorrHistTable>,
     ) -> Self {
         Self {
             tree,
@@ -56,6 +59,7 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
+            corrhist_table,
         }
     }
 
@@ -260,7 +264,7 @@ impl<'a> Searcher<'a> {
             self.tree[ptr].clear();
             self.tree.expand_node(ptr, pos, self.params, self.policy, 1);
 
-            let root_eval = pos.get_value_wdl(self.value, self.params);
+            let root_eval = pos.get_value_wdl(self.value, self.params, self.corrhist_table);
             self.tree[ptr].update(1.0 - root_eval);
         }
         // relabel preexisting root policies with root PST value

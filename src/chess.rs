@@ -4,12 +4,14 @@ pub mod consts;
 mod frc;
 mod moves;
 
+pub use self::{attacks::Attacks, board::Board, frc::Castling, moves::Move};
+use crate::mcts::SearchHelpers;
 use crate::{
     mcts::MctsParams,
     networks::{Accumulator, PolicyNetwork, ValueNetwork, POLICY_L1},
 };
 
-pub use self::{attacks::Attacks, board::Board, frc::Castling, moves::Move};
+use crate::mcts::corrhist::CorrHistTable;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum GameState {
@@ -109,6 +111,10 @@ impl ChessState {
         self.board.hash()
     }
 
+    pub fn ch_hash(&self) -> u64 {
+        self.board.ch_hash()
+    }
+
     pub fn make_move(&mut self, mov: Move) {
         self.stack.push(self.board.hash());
         self.board.make(mov, &self.castling);
@@ -165,8 +171,18 @@ impl ChessState {
         cp
     }
 
-    pub fn get_value_wdl(&self, value: &ValueNetwork, params: &MctsParams) -> f32 {
-        1.0 / (1.0 + (-(self.get_value(value, params) as f32) / 400.0).exp())
+    pub fn get_value_wdl(
+        &self,
+        value: &ValueNetwork,
+        params: &MctsParams,
+        corrhist_table: Option<&CorrHistTable>,
+    ) -> f32 {
+        let mut q = 1.0 / (1.0 + (-(self.get_value(value, params) as f32) / 400.0).exp());
+        if let Some(corrhist_table) = corrhist_table {
+            let ch_hash = self.ch_hash();
+            q = SearchHelpers::apply_corrhist(&params, corrhist_table, ch_hash, q);
+        }
+        q
     }
 
     pub fn perft(&self, depth: usize) -> u64 {

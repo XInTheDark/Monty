@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::mcts::corrhist::CorrHistTable;
 use crate::{
     mcts::{MctsParams, Searcher},
     tree::Node,
@@ -85,6 +86,19 @@ impl SearchHelpers {
         } else {
             node.q()
         }
+    }
+
+    pub fn apply_corrhist(
+        params: &MctsParams,
+        corrhist: &CorrHistTable,
+        ch_hash: u64,
+        original_q: f32,
+    ) -> f32 {
+        let entry = corrhist.get_or_create(ch_hash);
+        let avg_delta = entry.delta();
+        // TODO: minus or add?
+        let corrected_q = original_q - params.correction_history_lambda() * avg_delta;
+        corrected_q
     }
 
     /// Calculates the maximum allowed time usage for a search

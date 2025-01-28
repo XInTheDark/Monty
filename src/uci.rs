@@ -1,6 +1,6 @@
 use crate::{
     chess::{ChessState, Move},
-    mcts::{Limits, MctsParams, SearchHelpers, Searcher},
+    mcts::{corrhist::CorrHistTable, Limits, MctsParams, SearchHelpers, Searcher},
     networks::{PolicyNetwork, ValueNetwork},
     tree::Tree,
 };
@@ -83,7 +83,10 @@ pub fn run(policy: &PolicyNetwork, value: &ValueNetwork) {
             "quit" => std::process::exit(0),
             "eval" => {
                 println!("cp: {}", pos.get_value(value, &params));
-                println!("wdl: {:.2}%", 100.0 * pos.get_value_wdl(value, &params));
+                println!(
+                    "wdl: {:.2}%",
+                    100.0 * pos.get_value_wdl(value, &params, None)
+                );
             }
             "policy" => {
                 let f = pos.get_policy_feats(policy);
@@ -201,7 +204,8 @@ pub fn bench(depth: usize, policy: &PolicyNetwork, value: &ValueNetwork, params:
         let abort = AtomicBool::new(false);
         let pos = ChessState::from_fen(fen);
         tree.set_root_position(&pos);
-        let searcher = Searcher::new(&tree, params, policy, value, &abort);
+        let corrhist_table = CorrHistTable::new();
+        let searcher = Searcher::new(&tree, params, policy, value, &abort, Some(&corrhist_table));
         let timer = Instant::now();
         searcher.search(1, limits, false, &mut total_nodes);
         time += timer.elapsed().as_secs_f32();
@@ -382,6 +386,8 @@ fn go(
 
     tree.set_root_position(pos);
 
+    let corrhist_table = CorrHistTable::new();
+
     let limits = Limits {
         max_time,
         opt_time,
@@ -391,7 +397,8 @@ fn go(
 
     std::thread::scope(|s| {
         s.spawn(|| {
-            let searcher = Searcher::new(tree, params, policy, value, &abort);
+            let searcher =
+                Searcher::new(tree, params, policy, value, &abort, Some(&corrhist_table));
             let (mov, _) = searcher.search(threads, limits, true, &mut 0);
             println!("bestmove {}", pos.conv_mov_to_str(mov));
 

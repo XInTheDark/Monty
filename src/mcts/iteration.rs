@@ -73,6 +73,16 @@ pub fn perform_one(
 
         tree.propogate_proven_mates(ptr, tree[child_ptr].state());
 
+        // Update correction history.
+        if let Some(corrhist_table) = searcher.corrhist_table {
+            let old_q = node.q();
+            let multiweight = 1.0 / (1 + node.visits()) as f32;
+            let delta = (old_q - u) * multiweight;
+
+            let ch_hash = pos.ch_hash();
+            corrhist_table.update(ch_hash, delta, multiweight);
+        }
+
         u
     };
 
@@ -89,7 +99,9 @@ pub fn perform_one(
 
 fn get_utility(searcher: &Searcher, ptr: NodePtr, pos: &ChessState) -> f32 {
     match searcher.tree[ptr].state() {
-        GameState::Ongoing => pos.get_value_wdl(searcher.value, searcher.params),
+        GameState::Ongoing => {
+            pos.get_value_wdl(searcher.value, searcher.params, searcher.corrhist_table)
+        }
         GameState::Draw => 0.5,
         GameState::Lost(_) => 0.0,
         GameState::Won(_) => 1.0,

@@ -73,16 +73,6 @@ pub fn perform_one(
 
         tree.propogate_proven_mates(ptr, tree[child_ptr].state());
 
-        // Update correction history.
-        if let Some(corrhist_table) = searcher.corrhist_table {
-            let old_q = node.q();
-            let multiweight = 1.0; // simple weight for now
-            let delta = (old_q - u) * multiweight;
-
-            let ch_hash = pos.ch_hash();
-            corrhist_table.update(ch_hash, delta, multiweight);
-        }
-
         u
     };
 
@@ -90,6 +80,16 @@ pub fn perform_one(
     // **of the parent**, as they are usually only
     // accessed from the parent's POV
     u = 1.0 - u;
+
+    // Update correction history.
+    if let Some(corrhist_table) = searcher.corrhist_table {
+        let old_q = node.q();
+        let multiweight = 1.0; // simple weight for now
+        let delta = (old_q - u) * multiweight;
+
+        let ch_hash = pos.ch_hash();
+        corrhist_table.update(ch_hash, delta, multiweight);
+    }
 
     let new_q = node.update(u);
     tree.push_hash(hash, 1.0 - new_q);

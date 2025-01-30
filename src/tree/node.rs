@@ -47,6 +47,7 @@ impl Add<usize> for NodePtr {
     }
 }
 
+#[repr(C, align(64))]
 #[derive(Debug)]
 pub struct Node {
     actions: RwLock<NodePtr>,

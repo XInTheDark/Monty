@@ -391,15 +391,26 @@ impl Board {
             + 0x7acec0050bf82f43u64 * ((val >> 31) + 0xd571b3a92b1b2755u64)
     }
 
-    pub fn hash_cat(&self, a: u64, b: u64) -> u64 {
+    pub fn internal_hash_cat(&self, a: u64, b: u64) -> u64 {
         a ^ (0x299799adf0d95defu64 + self.internal_hash(b) + (a << 6) + (a >> 2))
+    }
+
+    pub fn hash_cat(&self, arr: &[u64]) -> u64 {
+        let mut hash = 0;
+        for &val in arr {
+            hash = self.internal_hash_cat(hash, val);
+        }
+        hash
     }
 
     // get correction history hash
     pub fn ch_hash(&self) -> u64 {
-        self.hash_cat(
+        self.hash_cat(&[
             self.bb[Side::WHITE] & self.bb[Piece::PAWN],
             self.bb[Side::BLACK] & self.bb[Piece::PAWN],
+            self.bb[Side::WHITE] & self.bb[Piece::KING],
+            self.bb[Side::BLACK] & self.bb[Piece::KING],
+        ]
         )
     }
 

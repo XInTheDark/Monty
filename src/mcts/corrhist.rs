@@ -8,11 +8,12 @@ pub struct CorrHistEntry {
 }
 
 impl CorrHistEntry {
+    #[inline(always)]
     pub fn delta(&self) -> f32 {
-        if self.weight_sum.abs() < f32::EPSILON {
+        if self.weight_sum == 0.0 {
             0.0
         } else {
-            (self.delta_sum / self.weight_sum) as f32
+            self.delta_sum / self.weight_sum
         }
     }
 }
@@ -25,11 +26,17 @@ pub struct CorrHistTable {
 impl CorrHistTable {
     pub fn new() -> Self {
         Self {
-            table: RwLock::new(HashMap::new()),
+            table: RwLock::new(HashMap::with_capacity(1 << 16)),
         }
     }
 
     pub fn get_or_create(&self, ch_hash: u64) -> CorrHistEntry {
+        {
+            let guard = self.table.read().unwrap();
+            if let Some(entry) = guard.get(&ch_hash) {
+                return entry.clone();
+            }
+        }
         let mut guard = self.table.write().unwrap();
         guard.entry(ch_hash).or_default().clone()
     }

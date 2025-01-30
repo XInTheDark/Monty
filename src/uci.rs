@@ -204,7 +204,7 @@ pub fn bench(depth: usize, policy: &PolicyNetwork, value: &ValueNetwork, params:
         let abort = AtomicBool::new(false);
         let pos = ChessState::from_fen(fen);
         tree.set_root_position(&pos);
-        let corrhist_table = CorrHistTable::new();
+        let corrhist_table = CorrHistTable::new(1);
         let searcher = Searcher::new(&tree, params, policy, value, &abort, Some(&corrhist_table));
         let timer = Instant::now();
         searcher.search(1, limits, false, &mut total_nodes);
@@ -386,7 +386,7 @@ fn go(
 
     tree.set_root_position(pos);
 
-    let corrhist_table = CorrHistTable::new();
+    let corrhist_table = CorrHistTable::new(threads);
 
     let limits = Limits {
         max_time,

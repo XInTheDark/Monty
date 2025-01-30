@@ -2,7 +2,7 @@ use std::{
     ops::Add,
     sync::{
         atomic::{AtomicI32, AtomicU16, AtomicU32, AtomicU8, Ordering},
-        RwLock, RwLockReadGuard, RwLockWriteGuard,
+        Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
 };
 
@@ -59,6 +59,7 @@ pub struct Node {
     q: AtomicU32,
     sq_q: AtomicU32,
     gini_impurity: AtomicU32,
+    lock: Mutex<()>, // Fine-grained lock for node access
 }
 
 impl Node {
@@ -74,7 +75,16 @@ impl Node {
             q: AtomicU32::new(0),
             sq_q: AtomicU32::new(0),
             gini_impurity: AtomicU32::new(0),
+            lock: Mutex::new(()), // Initialize lock
         }
+    }
+
+    pub fn acquire_lock(&self) {
+        let _guard = self.lock.lock().unwrap();
+    }
+
+    pub fn release_lock(&self) {
+        // automatically released when _guard goes out of scope
     }
 
     pub fn set_new(&self, mov: Move, policy: f32) {

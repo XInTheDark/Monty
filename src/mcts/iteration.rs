@@ -17,6 +17,9 @@ pub fn perform_one(
     let tree = searcher.tree;
     let node = &tree[ptr];
 
+    // Acquire lock for this node
+    node.acquire_lock();
+
     let mut u = if node.is_terminal() || node.visits() == 0 {
         if node.visits() == 0 {
             node.set_state(pos.game_state());
@@ -33,10 +36,14 @@ pub fn perform_one(
             get_utility(searcher, ptr, pos)
         }
     } else {
+        node.release_lock();
+
         // expand node on the second visit
         if node.is_not_expanded() {
             tree.expand_node(ptr, pos, searcher.params, searcher.policy, *depth)?;
         }
+
+        node.acquire_lock();
 
         // this node has now been accessed so we need to move its
         // children across if they are in the other tree half
@@ -54,18 +61,12 @@ pub fn perform_one(
 
         tree[child_ptr].inc_threads();
 
-        // acquire lock to avoid issues with desynced setting of
-        // game state between threads when threads > 1
-        let lock = if tree[child_ptr].visits() == 0 {
-            Some(node.actions_mut())
-        } else {
-            None
-        };
+        node.release_lock();
 
         // descend further
         let maybe_u = perform_one(searcher, pos, child_ptr, depth);
 
-        drop(lock);
+        node.acquire_lock();
 
         tree[child_ptr].dec_threads();
 

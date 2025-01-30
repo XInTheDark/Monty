@@ -408,8 +408,14 @@ impl Board {
         self.hash_cat(&[
             self.bb[Side::WHITE] & self.bb[Piece::PAWN],
             self.bb[Side::BLACK] & self.bb[Piece::PAWN],
-            self.bb[Side::WHITE] & self.bb[Piece::KING],
-            self.bb[Side::BLACK] & self.bb[Piece::KING],
+            (self.bb[Side::WHITE] & self.bb[Piece::KNIGHT]).count_ones() as u64,
+            (self.bb[Side::BLACK] & self.bb[Piece::KNIGHT]).count_ones() as u64,
+            (self.bb[Side::WHITE] & self.bb[Piece::BISHOP]).count_ones() as u64,
+            (self.bb[Side::BLACK] & self.bb[Piece::BISHOP]).count_ones() as u64,
+            (self.bb[Side::WHITE] & self.bb[Piece::ROOK]).count_ones() as u64,
+            (self.bb[Side::BLACK] & self.bb[Piece::ROOK]).count_ones() as u64,
+            (self.bb[Side::WHITE] & self.bb[Piece::QUEEN]).count_ones() as u64,
+            (self.bb[Side::BLACK] & self.bb[Piece::QUEEN]).count_ones() as u64,
         ]
         )
     }

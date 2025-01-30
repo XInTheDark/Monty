@@ -1,5 +1,5 @@
+use std::mem::transmute;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::mem::{transmute};
 
 static CORRHIST_SIZE: usize = 1 << 16;
 #[derive(Clone, Copy, Debug, Default)]
@@ -109,7 +109,7 @@ impl CorrHistTable {
                 old_bits,
                 new_bits,
                 Ordering::Relaxed,
-                Ordering::Relaxed
+                Ordering::Relaxed,
             ) {
                 Ok(_) => break,
                 Err(_) => continue,

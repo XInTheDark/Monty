@@ -51,14 +51,23 @@ impl Add<usize> for NodePtr {
 pub struct Node {
     actions: RwLock<NodePtr>,
     num_actions: AtomicU8,
+    _pad1: [u8; 63],
     state: AtomicU16,
+    _pad2: [u8; 62],
     threads: AtomicU16,
+    _pad3: [u8; 62],
     mov: AtomicU16,
+    _pad4: [u8; 62],
     policy: AtomicU16,
+    _pad5: [u8; 62],
     visits: AtomicI32,
+    _pad6: [u8; 60],
     q: AtomicU32,
+    _pad7: [u8; 60],
     sq_q: AtomicU32,
+    _pad8: [u8; 60],
     gini_impurity: AtomicU32,
+    _pad9: [u8; 60],
 }
 
 impl Node {
@@ -66,14 +75,23 @@ impl Node {
         Node {
             actions: RwLock::new(NodePtr::NULL),
             num_actions: AtomicU8::new(0),
+            _pad1: [0; 63],
             state: AtomicU16::new(u16::from(state)),
+            _pad2: [0; 62],
             threads: AtomicU16::new(0),
+            _pad3: [0; 62],
             mov: AtomicU16::new(0),
+            _pad4: [0; 62],
             policy: AtomicU16::new(0),
+            _pad5: [0; 62],
             visits: AtomicI32::new(0),
+            _pad6: [0; 60],
             q: AtomicU32::new(0),
+            _pad7: [0; 60],
             sq_q: AtomicU32::new(0),
+            _pad8: [0; 60],
             gini_impurity: AtomicU32::new(0),
+            _pad9: [0; 60],
         }
     }
 

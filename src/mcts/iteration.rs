@@ -2,14 +2,14 @@ use crate::{
     chess::{ChessState, GameState},
     tree::{Node, NodePtr},
 };
-
-use super::{SearchHelpers, Searcher};
+use super::{SearchHelpers, Searcher, batch_manager::BatchManager};
 
 pub fn perform_one(
     searcher: &Searcher,
     pos: &mut ChessState,
     ptr: NodePtr,
     depth: &mut usize,
+    batch: &BatchManager,
 ) -> Option<f32> {
     *depth += 1;
 
@@ -22,7 +22,6 @@ pub fn perform_one(
             node.set_state(pos.game_state());
         }
 
-        // probe hash table to use in place of network
         if node.state() == GameState::Ongoing {
             if let Some(entry) = tree.probe_hash(hash) {
                 entry.q()
@@ -33,16 +32,12 @@ pub fn perform_one(
             get_utility(searcher, ptr, pos)
         }
     } else {
-        // expand node on the second visit
         if node.is_not_expanded() {
             tree.expand_node(ptr, pos, searcher.params, searcher.policy, *depth)?;
         }
 
-        // this node has now been accessed so we need to move its
-        // children across if they are in the other tree half
         tree.fetch_children(ptr)?;
 
-        // select action to take via PUCT
         let action = pick_action(searcher, ptr, node);
 
         let first_child_ptr = { *node.actions() };
@@ -54,16 +49,13 @@ pub fn perform_one(
 
         tree[child_ptr].inc_threads();
 
-        // acquire lock to avoid issues with desynced setting of
-        // game state between threads when threads > 1
         let lock = if tree[child_ptr].visits() == 0 {
             Some(node.actions_mut())
         } else {
             None
         };
 
-        // descend further
-        let maybe_u = perform_one(searcher, pos, child_ptr, depth);
+        let maybe_u = perform_one(searcher, pos, child_ptr, depth, batch);
 
         drop(lock);
 
@@ -76,13 +68,12 @@ pub fn perform_one(
         u
     };
 
-    // node scores are stored from the perspective
-    // **of the parent**, as they are usually only
-    // accessed from the parent's POV
+    // adjust from parent's POV
     u = 1.0 - u;
 
     let new_q = node.update(u);
-    tree.push_hash(hash, 1.0 - new_q);
+    // Instead of updating the tree immediately we queue the update.
+    batch.push_update(hash, 1.0 - new_q);
 
     Some(u)
 }
@@ -108,7 +99,6 @@ fn pick_action(searcher: &Searcher, ptr: NodePtr, node: &Node) -> usize {
     searcher.tree.get_best_child_by_key(ptr, |child| {
         let mut q = SearchHelpers::get_action_value(child, fpu);
 
-        // virtual loss
         let threads = f64::from(child.threads());
         if threads > 0.0 {
             let visits = f64::from(child.visits());

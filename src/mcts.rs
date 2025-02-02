@@ -10,12 +10,51 @@ use crate::{
     networks::{PolicyNetwork, ValueNetwork},
     tree::{NodePtr, Tree},
 };
-
 use std::{
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
     thread,
     time::Instant,
 };
+
+pub mod batch_manager {
+    use crate::tree::Tree;
+    use std::sync::Mutex;
+
+    pub struct BatchUpdate {
+        pub hash: u64,
+        pub new_q: f32,
+    }
+
+    pub struct BatchManager {
+        queue: Mutex<Vec<BatchUpdate>>,
+    }
+
+    impl BatchManager {
+        pub fn new() -> Self {
+            Self {
+                queue: Mutex::new(Vec::new()),
+            }
+        }
+
+        pub fn push_update(&self, hash: u64, new_q: f32) {
+            let mut q = self.queue.lock().unwrap();
+            q.push(BatchUpdate { hash, new_q });
+        }
+
+        pub fn flush(&self, tree: &Tree) {
+            let mut q = self.queue.lock().unwrap();
+            // Process each batched update.
+            for update in q.drain(..) {
+                tree.push_hash(update.hash, update.new_q);
+            }
+        }
+    }
+}
+
+use batch_manager::BatchManager;
 
 #[derive(Clone, Copy)]
 pub struct Limits {
@@ -35,11 +74,12 @@ pub struct SearchStats {
 }
 
 pub struct Searcher<'a> {
-    tree: &'a Tree,
-    params: &'a MctsParams,
-    policy: &'a PolicyNetwork,
-    value: &'a ValueNetwork,
-    abort: &'a AtomicBool,
+    pub tree: &'a Tree,
+    pub params: &'a MctsParams,
+    pub policy: &'a PolicyNetwork,
+    pub value: &'a ValueNetwork,
+    pub abort: &'a AtomicBool,
+    pub batch_manager: Arc<BatchManager>,
 }
 
 impl<'a> Searcher<'a> {
@@ -56,6 +96,7 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
+            batch_manager: Arc::new(BatchManager::new()),
         }
     }
 
@@ -106,7 +147,7 @@ impl<'a> Searcher<'a> {
             let mut pos = self.tree.root_position().clone();
             let mut this_depth = 0;
 
-            if iteration::perform_one(self, &mut pos, self.tree.root_node(), &mut this_depth)
+            if iteration::perform_one(self, &mut pos, self.tree.root_node(), &mut this_depth, &self.batch_manager)
                 .is_none()
             {
                 return false;
@@ -290,31 +331,41 @@ impl<'a> Searcher<'a> {
         let mut best_move_changes = 0;
         let mut previous_score = f32::NEG_INFINITY;
 
-        // search loop
+        let mut iterations = 0;
+
+        // Main search loop.
         while !self.abort.load(Ordering::Relaxed) {
-            thread::scope(|s| {
-                s.spawn(|| {
-                    self.playout_until_full_main(
-                        &limits,
-                        &timer,
-                        #[cfg(not(feature = "uci-minimal"))]
-                        &mut timer_last_output,
-                        &search_stats,
-                        &mut best_move,
-                        &mut best_move_changes,
-                        &mut previous_score,
-                        #[cfg(not(feature = "uci-minimal"))]
-                        uci_output,
-                    );
-                });
-
-                for _ in 0..threads - 1 {
-                    s.spawn(|| self.playout_until_full_worker(&search_stats));
+            let mut depth = 0;
+            // Use a clone of the current position per playout.
+            let mut pos_clone = pos.clone();
+            if let Some(_val) = iteration::perform_one(self, &mut pos_clone, node, &mut depth, &self.batch_manager) {
+                search_stats.total_iters.fetch_add(1, Ordering::Relaxed);
+                search_stats.total_nodes.fetch_add(depth, Ordering::Relaxed);
+                // Update the deepest search depth encountered.
+                loop {
+                    let current = search_stats.seldepth.load(Ordering::Relaxed);
+                    if depth > current {
+                        if search_stats.seldepth.compare_exchange(current, depth, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
                 }
-            });
+            }
+            // Flush the batched updates to process tree stat updates.
+            self.batch_manager.flush(self.tree);
+            iterations += 1;
 
-            if !self.abort.load(Ordering::Relaxed) {
-                self.tree.flip(true, threads);
+            // Check if max iterations (nodes) limit is reached.
+            if limits.max_nodes > 0 && iterations >= limits.max_nodes {
+                break;
+            }
+            // Check time limit if set.
+            if let Some(max_time) = limits.max_time {
+                if timer.elapsed().as_millis() > max_time {
+                    break;
+                }
             }
         }
 

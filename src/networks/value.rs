@@ -19,6 +19,7 @@ const FACTOR: i16 = 32;
 const L1: usize = 3072;
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct ValueNetwork {
     pst: [Accumulator<f32, 3>; threats::TOTAL],
     l1: Layer<i16, { threats::TOTAL }, L1>,

@@ -5,14 +5,18 @@ mod params;
 pub use helpers::SearchHelpers;
 pub use params::MctsParams;
 
+use std::sync::{atomic::AtomicBool, Arc};
+use crossbeam::channel::{self, Sender};
+use futures::channel::oneshot;
+
 use crate::{
-    chess::{GameState, Move},
+    chess::{ChessState, GameState, Move},
     networks::{PolicyNetwork, ValueNetwork},
     tree::{NodePtr, Tree},
 };
 
 use std::{
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
     thread,
     time::Instant,
 };
@@ -34,12 +38,66 @@ pub struct SearchStats {
     pub seldepth: AtomicUsize,
 }
 
+struct BatcherInner {
+    request_tx: Sender<(ChessState, oneshot::Sender<f32>)>,
+    num_evaluators: usize,
+    value: Arc<ValueNetwork>,
+    params: Arc<MctsParams>,
+}
+
+#[derive(Clone)]
+pub struct Batcher {
+    inner: Arc<BatcherInner>,
+}
+
+impl Batcher {
+    pub fn new(num_evaluators: usize, value: Arc<ValueNetwork>, params: Arc<MctsParams>) -> Self {
+        let (request_tx, request_rx_origin) = channel::unbounded();
+        // Add explicit type annotation when cloning the receiver:
+        let request_rx: crossbeam::channel::Receiver<(ChessState, oneshot::Sender<f32>)> = request_rx_origin.clone();
+
+        for _ in 0..num_evaluators {
+            let request_rx = request_rx.clone();
+            let value = Arc::clone(&value);
+            let params = Arc::clone(&params);
+
+            std::thread::spawn(move || {
+                for (pos, result_tx) in request_rx {
+                    let result = pos.get_value_wdl(&value, &params);
+                    let _ = result_tx.send(result);
+                }
+            });
+        }
+
+        Batcher {
+            inner: Arc::new(BatcherInner {
+                request_tx,
+                num_evaluators,
+                value,
+                params,
+            }),
+        }
+    }
+
+    pub fn evaluate(&self, pos: ChessState) -> f32 {
+        if self.inner.num_evaluators == 0 {
+            pos.get_value_wdl(&self.inner.value, &self.inner.params)
+        } else {
+            let (result_tx, result_rx) = oneshot::channel();
+            self.inner.request_tx.send((pos, result_tx)).unwrap();
+            // result_rx.recv().unwrap()
+            futures::executor::block_on(result_rx).unwrap()
+        }
+    }
+}
+
 pub struct Searcher<'a> {
     tree: &'a Tree,
     params: &'a MctsParams,
     policy: &'a PolicyNetwork,
-    value: &'a ValueNetwork,
+    value: Arc<ValueNetwork>,
     abort: &'a AtomicBool,
+    batcher: Batcher,
 }
 
 impl<'a> Searcher<'a> {
@@ -47,8 +105,9 @@ impl<'a> Searcher<'a> {
         tree: &'a Tree,
         params: &'a MctsParams,
         policy: &'a PolicyNetwork,
-        value: &'a ValueNetwork,
+        value: Arc<ValueNetwork>,
         abort: &'a AtomicBool,
+        batcher: Batcher,
     ) -> Self {
         Self {
             tree,
@@ -56,6 +115,7 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
+            batcher,
         }
     }
 
@@ -260,7 +320,7 @@ impl<'a> Searcher<'a> {
             self.tree[ptr].clear();
             self.tree.expand_node(ptr, pos, self.params, self.policy, 1);
 
-            let root_eval = pos.get_value_wdl(self.value, self.params);
+            let root_eval = pos.get_value_wdl(&*self.value, self.params);
             self.tree[ptr].update(1.0 - root_eval);
         }
         // relabel preexisting root policies with root PST value

@@ -1,6 +1,6 @@
 use crate::{
     chess::{ChessState, Move},
-    mcts::{Limits, MctsParams, SearchHelpers, Searcher},
+    mcts::{Limits, MctsParams, SearchHelpers, Searcher, Batcher},
     networks::{PolicyNetwork, ValueNetwork},
     tree::Tree,
 };
@@ -8,6 +8,7 @@ use crate::{
 use std::{
     io, process,
     sync::atomic::{AtomicBool, Ordering},
+    sync::Arc,
     time::Instant,
 };
 
@@ -201,7 +202,14 @@ pub fn bench(depth: usize, policy: &PolicyNetwork, value: &ValueNetwork, params:
         let abort = AtomicBool::new(false);
         let pos = ChessState::from_fen(fen);
         tree.set_root_position(&pos);
-        let searcher = Searcher::new(&tree, params, policy, value, &abort);
+        let searcher = Searcher::new(
+            &tree,
+                 params,
+                 policy,
+            Arc::new(value.clone()),        // convert reference to Arc
+                 &abort,
+                 Batcher::new(0, Arc::new(value.clone()), Arc::new(params.clone()))
+             );
         let timer = Instant::now();
         searcher.search(1, limits, false, &mut total_nodes);
         time += timer.elapsed().as_secs_f32();
@@ -391,7 +399,14 @@ fn go(
 
     std::thread::scope(|s| {
         s.spawn(|| {
-            let searcher = Searcher::new(tree, params, policy, value, &abort);
+             let searcher = Searcher::new(
+                     tree,
+                     params,
+                    policy,
+                     Arc::new(value.clone()),
+                         &abort,
+                     Batcher::new(0, Arc::new(value.clone()), Arc::new(params.clone()))
+                 );
             let (mov, _) = searcher.search(threads, limits, true, &mut 0);
             println!("bestmove {}", pos.conv_mov_to_str(mov));
 

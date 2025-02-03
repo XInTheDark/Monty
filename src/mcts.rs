@@ -13,10 +13,12 @@ use crate::{
 
 use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::Arc,
     thread,
     time::Instant,
 };
 
+/// Limits for controlling the search.
 #[derive(Clone, Copy)]
 pub struct Limits {
     pub max_time: Option<u128>,
@@ -25,6 +27,7 @@ pub struct Limits {
     pub max_nodes: usize,
 }
 
+/// Statistics gathered during search.
 #[derive(Default)]
 pub struct SearchStats {
     pub total_nodes: AtomicUsize,
@@ -34,21 +37,28 @@ pub struct SearchStats {
     pub seldepth: AtomicUsize,
 }
 
+/// The searcher manages the tree search.
+/// (Note: We add a new field “batcher” for evaluation batching.)
 pub struct Searcher<'a> {
-    tree: &'a Tree,
-    params: &'a MctsParams,
-    policy: &'a PolicyNetwork,
-    value: &'a ValueNetwork,
-    abort: &'a AtomicBool,
+    pub tree: &'a Tree,
+    pub params: &'a MctsParams,
+    pub policy: &'a PolicyNetwork,
+    pub value: &'a ValueNetwork,
+    pub abort: &'a AtomicBool,
+    /// When present (i.e. when total threads > 4) this provides batched network evaluations.
+    pub batcher: Option<Arc<crate::batcher::Batcher>>,
 }
 
 impl<'a> Searcher<'a> {
+    /// Create a new Searcher. The extra parameter “thread_count” tells us how many total threads
+    /// will be used (so we can enable batching if more than four are available).
     pub fn new(
         tree: &'a Tree,
         params: &'a MctsParams,
         policy: &'a PolicyNetwork,
         value: &'a ValueNetwork,
         abort: &'a AtomicBool,
+        thread_count: usize,
     ) -> Self {
         Self {
             tree,
@@ -56,6 +66,14 @@ impl<'a> Searcher<'a> {
             policy,
             value,
             abort,
+            batcher: if thread_count > 4 {
+                Some(Arc::new(crate::batcher::Batcher::new(
+                    Arc::new(value.clone()),
+                    Arc::new(params.clone()),
+                )))
+            } else {
+                None
+            },
         }
     }
 
@@ -118,7 +136,7 @@ impl<'a> Searcher<'a> {
                 .fetch_add(this_depth, Ordering::Relaxed);
             search_stats
                 .seldepth
-                .fetch_max(this_depth - 1, Ordering::Relaxed);
+                .fetch_max(this_depth.saturating_sub(1), Ordering::Relaxed);
             if main_thread {
                 search_stats.main_iters.fetch_add(1, Ordering::Relaxed);
             }
@@ -198,7 +216,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        // define "depth" as the average depth of selection
+        // average search depth
         let total_depth = search_stats.total_nodes.load(Ordering::Relaxed)
             - search_stats.total_iters.load(Ordering::Relaxed);
         let new_depth = total_depth / search_stats.total_iters.load(Ordering::Relaxed);
@@ -236,6 +254,7 @@ impl<'a> Searcher<'a> {
         false
     }
 
+    /// Run a full search. (Note: “threads” is the total number of threads requested.)
     pub fn search(
         &self,
         threads: usize,
@@ -290,7 +309,39 @@ impl<'a> Searcher<'a> {
         let mut best_move_changes = 0;
         let mut previous_score = f32::NEG_INFINITY;
 
-        // search loop
+        // Reserve only four search threads; the rest (if any) are used for batched evaluation.
+        let search_thread_count = if threads > 4 { 4 } else { threads };
+        let eval_thread_count = threads.saturating_sub(search_thread_count);
+
+        // If evaluator threads are required, spawn them.
+        if eval_thread_count > 0 {
+            let batcher = Arc::new(crate::batcher::Batcher::new(
+                Arc::new(self.value.clone()),
+                Arc::new(self.params.clone()),
+            ));
+            // Spawn evaluator threads.
+            thread::scope(|s| {
+                for _ in 0..eval_thread_count {
+                    let batcher_clone = Arc::clone(&batcher);
+                    s.spawn(move || {
+                        batcher_clone.run_evaluator_loop();
+                    });
+                }
+            });
+            // Update our Searcher’s batcher field.
+            // (Since self is not mutable, we use an unsafe pointer cast.)
+            let self_ptr = self as *const _ as *mut Searcher;
+            unsafe {
+                (*self_ptr).batcher = Some(batcher);
+            }
+        } else {
+            let self_ptr = self as *const _ as *mut Searcher;
+            unsafe {
+                (*self_ptr).batcher = None;
+            }
+        }
+
+        // Main search loop.
         while !self.abort.load(Ordering::Relaxed) {
             thread::scope(|s| {
                 s.spawn(|| {
@@ -308,7 +359,7 @@ impl<'a> Searcher<'a> {
                     );
                 });
 
-                for _ in 0..threads - 1 {
+                for _ in 0..search_thread_count - 1 {
                     s.spawn(|| self.playout_until_full_worker(&search_stats));
                 }
             });

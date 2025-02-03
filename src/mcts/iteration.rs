@@ -89,7 +89,14 @@ pub fn perform_one(
 
 fn get_utility(searcher: &Searcher, ptr: NodePtr, pos: &ChessState) -> f32 {
     match searcher.tree[ptr].state() {
-        GameState::Ongoing => pos.get_value_wdl(searcher.value, searcher.params),
+        GameState::Ongoing => {
+            // If a batcher is active, use it for evaluation.
+            if let Some(ref batcher) = searcher.batcher {
+                batcher.evaluate_value(pos)
+            } else {
+                pos.get_value_wdl(searcher.value, searcher.params)
+            }
+        }
         GameState::Draw => 0.5,
         GameState::Lost(_) => 0.0,
         GameState::Won(_) => 1.0,

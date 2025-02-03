@@ -1,12 +1,13 @@
 mod helpers;
 mod iteration;
 mod params;
+pub mod evaluator;
 
 pub use helpers::SearchHelpers;
 pub use params::MctsParams;
 
 use crate::{
-    chess::{GameState, Move},
+    chess::{ChessState, GameState, Move},
     networks::{PolicyNetwork, ValueNetwork},
     tree::{NodePtr, Tree},
 };
@@ -35,11 +36,11 @@ pub struct SearchStats {
 }
 
 pub struct Searcher<'a> {
-    tree: &'a Tree,
-    params: &'a MctsParams,
-    policy: &'a PolicyNetwork,
-    value: &'a ValueNetwork,
-    abort: &'a AtomicBool,
+    pub tree: &'a Tree,
+    pub params: &'a MctsParams,
+    pub policy: &'a PolicyNetwork,
+    pub value: &'a ValueNetwork,
+    pub abort: &'a AtomicBool,
 }
 
 impl<'a> Searcher<'a> {
@@ -60,6 +61,102 @@ impl<'a> Searcher<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn search(
+        &self,
+        threads: usize,
+        limits: Limits,
+        uci_output: bool,
+        update_nodes: &mut usize,
+    ) -> (Move, f32) {
+        let timer = Instant::now();
+        #[cfg(not(feature = "uci-minimal"))]
+        let mut timer_last_output = Instant::now();
+
+        let pos = self.tree.root_position();
+        let node = self.tree.root_node();
+
+        if self.tree.is_empty() {
+            let ptr = self.tree.push_new_node().unwrap();
+            assert_eq!(node, ptr);
+            self.tree[ptr].clear();
+            self.tree.expand_node(ptr, pos, self.params, self.policy, 1);
+
+            let root_eval = pos.get_value_wdl(self.value, self.params);
+            self.tree[ptr].update(1.0 - root_eval);
+        } else if self.tree[node].has_children() {
+            self.tree.relabel_policy(node, pos, self.params, self.policy, 1);
+
+            let first_child_ptr = { *self.tree[node].actions() };
+
+            for action in 0..self.tree[node].num_actions() {
+                let ptr = first_child_ptr + action;
+                if ptr.is_null() || !self.tree[ptr].has_children() {
+                    continue;
+                }
+                let mut child = pos.clone();
+                child.make_move(self.tree[ptr].parent_move());
+                self.tree.relabel_policy(ptr, &child, self.params, self.policy, 2);
+            }
+        }
+
+        let search_stats = SearchStats::default();
+        let mut best_move = Move::NULL;
+        let mut best_move_changes = 0;
+        let mut previous_score = f32::NEG_INFINITY;
+
+        // If more than 4 threads are requested, only 4 are used for search updates and the rest become evaluator threads.
+        let effective_search_threads = if threads > 4 { 4 } else { threads };
+        let evaluator_threads = if threads > 4 { threads - effective_search_threads } else { 0 };
+
+        if evaluator_threads > 0 {
+            evaluator::setup(evaluator_threads);
+        }
+
+        // Main search loop.
+        while !self.abort.load(Ordering::Relaxed) {
+            thread::scope(|s| {
+                s.spawn(|| {
+                    self.playout_until_full_main(
+                        &limits,
+                        &timer,
+                        #[cfg(not(feature = "uci-minimal"))] &mut timer_last_output,
+                        &search_stats,
+                        &mut best_move,
+                        &mut best_move_changes,
+                        &mut previous_score,
+                        #[cfg(not(feature = "uci-minimal"))] uci_output,
+                    );
+                });
+
+                for _ in 0..(effective_search_threads - 1) {
+                    s.spawn(|| self.playout_until_full_worker(&search_stats));
+                }
+            });
+
+            if !self.abort.load(Ordering::Relaxed) {
+                self.tree.flip(true, threads);
+            }
+        }
+
+        *update_nodes += search_stats.total_nodes.load(Ordering::Relaxed);
+
+        if uci_output {
+            self.search_report(
+                search_stats.avg_depth.load(Ordering::Relaxed).max(1),
+                search_stats.seldepth.load(Ordering::Relaxed),
+                &timer,
+                search_stats.total_nodes.load(Ordering::Relaxed),
+            );
+        }
+
+        if evaluator_threads > 0 {
+            evaluator::shutdown();
+        }
+
+        let (_, mov, q) = self.get_best_action(self.tree.root_node());
+        (mov, q)
+    }
+
     fn playout_until_full_main(
         &self,
         limits: &Limits,
@@ -106,19 +203,13 @@ impl<'a> Searcher<'a> {
             let mut pos = self.tree.root_position().clone();
             let mut this_depth = 0;
 
-            if iteration::perform_one(self, &mut pos, self.tree.root_node(), &mut this_depth)
-                .is_none()
-            {
+            if iteration::perform_one(self, &mut pos, self.tree.root_node(), &mut this_depth).is_none() {
                 return false;
             }
 
             search_stats.total_iters.fetch_add(1, Ordering::Relaxed);
-            search_stats
-                .total_nodes
-                .fetch_add(this_depth, Ordering::Relaxed);
-            search_stats
-                .seldepth
-                .fetch_max(this_depth - 1, Ordering::Relaxed);
+            search_stats.total_nodes.fetch_add(this_depth, Ordering::Relaxed);
+            search_stats.seldepth.fetch_max(this_depth - 1, Ordering::Relaxed);
             if main_thread {
                 search_stats.main_iters.fetch_add(1, Ordering::Relaxed);
             }
@@ -198,7 +289,6 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        // define "depth" as the average depth of selection
         let total_depth = search_stats.total_nodes.load(Ordering::Relaxed)
             - search_stats.total_iters.load(Ordering::Relaxed);
         let new_depth = total_depth / search_stats.total_iters.load(Ordering::Relaxed);
@@ -207,7 +297,6 @@ impl<'a> Searcher<'a> {
             if new_depth >= limits.max_depth {
                 return true;
             }
-
             #[cfg(not(feature = "uci-minimal"))]
             if uci_output {
                 self.search_report(
@@ -234,103 +323,6 @@ impl<'a> Searcher<'a> {
         }
 
         false
-    }
-
-    pub fn search(
-        &self,
-        threads: usize,
-        limits: Limits,
-        uci_output: bool,
-        update_nodes: &mut usize,
-    ) -> (Move, f32) {
-        let timer = Instant::now();
-        #[cfg(not(feature = "uci-minimal"))]
-        let mut timer_last_output = Instant::now();
-
-        let pos = self.tree.root_position();
-        let node = self.tree.root_node();
-
-        // the root node is added to an empty tree, **and not counted** towards the
-        // total node count, in order for `go nodes 1` to give the expected result
-        if self.tree.is_empty() {
-            let ptr = self.tree.push_new_node().unwrap();
-
-            assert_eq!(node, ptr);
-
-            self.tree[ptr].clear();
-            self.tree.expand_node(ptr, pos, self.params, self.policy, 1);
-
-            let root_eval = pos.get_value_wdl(self.value, self.params);
-            self.tree[ptr].update(1.0 - root_eval);
-        }
-        // relabel preexisting root policies with root PST value
-        else if self.tree[node].has_children() {
-            self.tree
-                .relabel_policy(node, pos, self.params, self.policy, 1);
-
-            let first_child_ptr = { *self.tree[node].actions() };
-
-            for action in 0..self.tree[node].num_actions() {
-                let ptr = first_child_ptr + action;
-
-                if ptr.is_null() || !self.tree[ptr].has_children() {
-                    continue;
-                }
-
-                let mut child = pos.clone();
-                child.make_move(self.tree[ptr].parent_move());
-                self.tree
-                    .relabel_policy(ptr, &child, self.params, self.policy, 2);
-            }
-        }
-
-        let search_stats = SearchStats::default();
-
-        let mut best_move = Move::NULL;
-        let mut best_move_changes = 0;
-        let mut previous_score = f32::NEG_INFINITY;
-
-        // search loop
-        while !self.abort.load(Ordering::Relaxed) {
-            thread::scope(|s| {
-                s.spawn(|| {
-                    self.playout_until_full_main(
-                        &limits,
-                        &timer,
-                        #[cfg(not(feature = "uci-minimal"))]
-                        &mut timer_last_output,
-                        &search_stats,
-                        &mut best_move,
-                        &mut best_move_changes,
-                        &mut previous_score,
-                        #[cfg(not(feature = "uci-minimal"))]
-                        uci_output,
-                    );
-                });
-
-                for _ in 0..threads - 1 {
-                    s.spawn(|| self.playout_until_full_worker(&search_stats));
-                }
-            });
-
-            if !self.abort.load(Ordering::Relaxed) {
-                self.tree.flip(true, threads);
-            }
-        }
-
-        *update_nodes += search_stats.total_nodes.load(Ordering::Relaxed);
-
-        if uci_output {
-            self.search_report(
-                search_stats.avg_depth.load(Ordering::Relaxed).max(1),
-                search_stats.seldepth.load(Ordering::Relaxed),
-                &timer,
-                search_stats.total_nodes.load(Ordering::Relaxed),
-            );
-        }
-
-        let (_, mov, q) = self.get_best_action(self.tree.root_node());
-        (mov, q)
     }
 
     fn search_report(&self, depth: usize, seldepth: usize, timer: &Instant, nodes: usize) {
@@ -416,10 +408,7 @@ impl<'a> Searcher<'a> {
         let first_child_ptr = { *self.tree[self.tree.root_node()].actions() };
         for action in 0..self.tree[self.tree.root_node()].num_actions() {
             let child = &self.tree[first_child_ptr + action];
-            let mov = self
-                .tree
-                .root_position()
-                .conv_mov_to_str(child.parent_move());
+            let mov = self.tree.root_position().conv_mov_to_str(child.parent_move());
             let q = child.q() * 100.0;
             println!(
                 "{mov} -> {q:.2}% V({}) S({})",

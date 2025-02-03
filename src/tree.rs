@@ -185,7 +185,7 @@ impl Tree {
         let mut actions = Vec::new();
 
         pos.map_legal_moves(|mov| {
-            let policy = pos.get_policy(mov, &feats, policy);
+            let policy = crate::mcts::evaluator::evaluate_policy(pos, mov, &feats, policy);
             actions.push((mov, policy));
             max = max.max(policy);
         });
@@ -238,7 +238,7 @@ impl Tree {
 
         for action in 0..num_actions {
             let mov = self[*actions + action].parent_move();
-            let policy = pos.get_policy(mov, &feats, policy);
+            let policy = crate::mcts::evaluator::evaluate_policy(pos, mov, &feats, policy);
 
             policies.push(policy);
             max = max.max(policy);

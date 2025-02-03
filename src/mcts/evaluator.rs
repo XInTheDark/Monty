@@ -9,27 +9,39 @@ use crate::chess::ChessState;
 use crate::mcts::MctsParams;
 use crate::networks::{PolicyNetwork, ValueNetwork};
 use crate::networks::accumulator::Accumulator;
-
 use crate::networks::POLICY_L1;
 
-// Define a job type that can be either a value evaluation request or a policy evaluation request.
+#[derive(Copy, Clone)]
+pub struct SharedPtr<T>(*const T);
+
+impl<T> SharedPtr<T> {
+    pub fn new(ptr: *const T) -> Self {
+        SharedPtr(ptr)
+    }
+    pub fn get(&self) -> *const T {
+        self.0
+    }
+}
+
+unsafe impl<T: Sync> Send for SharedPtr<T> {}
+unsafe impl<T: Sync> Sync for SharedPtr<T> {}
+
 pub enum EvalJob {
     EvaluateValue {
         state: ChessState,
         params: MctsParams,
-        value: *const ValueNetwork, // safe because ValueNetwork is immutable/read‐only (memory–mapped)
+        value: SharedPtr<ValueNetwork>,
         ret: Sender<f32>,
     },
     EvaluatePolicy {
         state: ChessState,
         mov: crate::chess::Move,
         feats: Accumulator<i16, { POLICY_L1 / 2 }>,
-        policy: *const PolicyNetwork,
+        policy: SharedPtr<PolicyNetwork>,
         ret: Sender<f32>,
     },
 }
 
-// Internal evaluation queue structure.
 struct EvalQueue {
     queue: Mutex<VecDeque<EvalJob>>,
     condvar: Condvar,
@@ -48,7 +60,6 @@ impl EvalQueue {
 
 static EVAL_QUEUE: Lazy<EvalQueue> = Lazy::new(|| EvalQueue::new());
 
-// We also keep evaluator thread handles.
 static mut EVALUATOR_HANDLES: Option<Mutex<Vec<thread::JoinHandle<()>>>> = None;
 
 pub fn setup(num_threads: usize) {
@@ -68,10 +79,8 @@ pub fn shutdown() {
     {
         let mut shut = EVAL_QUEUE.shutdown.lock().unwrap();
         *shut = true;
-        // Wake up every waiting evaluator thread.
         EVAL_QUEUE.condvar.notify_all();
     }
-    // Join evaluator threads.
     unsafe {
         if let Some(ref mutex_handles) = EVALUATOR_HANDLES {
             let mut handles = mutex_handles.lock().unwrap();
@@ -106,13 +115,12 @@ fn evaluator_thread() {
         for job in batch {
             match job {
                 EvalJob::EvaluateValue { state, params, value, ret } => {
-                    let val_net: &ValueNetwork = unsafe { &*value };
-                    // Compute value evaluation.
+                    let val_net: &ValueNetwork = unsafe { &*value.get() };
                     let result = state.get_value_wdl(val_net, &params);
                     let _ = ret.send(result);
                 }
                 EvalJob::EvaluatePolicy { state, mov, feats, policy, ret } => {
-                    let pol_net: &PolicyNetwork = unsafe { &*policy };
+                    let pol_net: &PolicyNetwork = unsafe { &*policy.get() };
                     let result = state.get_policy(mov, &feats, pol_net);
                     let _ = ret.send(result);
                 }
@@ -121,8 +129,8 @@ fn evaluator_thread() {
     }
 }
 
-// Public API for value evaluation.
-// If the evaluator pool is set up, the job is sent; otherwise the evaluation is performed directly.
+/// Public API for value evaluation. If the evaluator pool is set up the job is queued;
+/// otherwise the evaluation is performed directly.
 pub fn evaluate_value(state: &ChessState, value: &ValueNetwork, params: &MctsParams) -> f32 {
     unsafe {
         if EVALUATOR_HANDLES.is_some() {
@@ -130,7 +138,7 @@ pub fn evaluate_value(state: &ChessState, value: &ValueNetwork, params: &MctsPar
             let job = EvalJob::EvaluateValue {
                 state: state.clone(),
                 params: params.clone(),
-                value: value as *const ValueNetwork,
+                value: SharedPtr::new(value as *const ValueNetwork),
                 ret: tx,
             };
             {
@@ -145,7 +153,7 @@ pub fn evaluate_value(state: &ChessState, value: &ValueNetwork, params: &MctsPar
     }
 }
 
-// Public API for policy evaluation.
+/// Public API for policy evaluation.
 pub fn evaluate_policy(state: &ChessState, mov: crate::chess::Move, feats: &Accumulator<i16, { POLICY_L1 / 2 }>, policy: &PolicyNetwork) -> f32 {
     unsafe {
         if EVALUATOR_HANDLES.is_some() {
@@ -154,7 +162,7 @@ pub fn evaluate_policy(state: &ChessState, mov: crate::chess::Move, feats: &Accu
                 state: state.clone(),
                 mov,
                 feats: feats.clone(),
-                policy: policy as *const PolicyNetwork,
+                policy: SharedPtr::new(policy as *const PolicyNetwork),
                 ret: tx,
             };
             {

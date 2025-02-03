@@ -5,7 +5,7 @@ mod frc;
 mod moves;
 
 use crate::{
-    mcts::MctsParams,
+    mcts::{MctsParams, Searcher},
     networks::{Accumulator, PolicyNetwork, ValueNetwork, POLICY_L1},
 };
 
@@ -122,19 +122,6 @@ impl ChessState {
         self.board.stm()
     }
 
-    pub fn get_policy_feats(&self, policy: &PolicyNetwork) -> Accumulator<i16, { POLICY_L1 / 2 }> {
-        policy.hl(&self.board)
-    }
-
-    pub fn get_policy(
-        &self,
-        mov: Move,
-        hl: &Accumulator<i16, { POLICY_L1 / 2 }>,
-        policy: &PolicyNetwork,
-    ) -> f32 {
-        policy.get(&self.board, &mov, hl)
-    }
-
     #[cfg(not(feature = "datagen"))]
     fn piece_count(&self, piece: usize) -> i32 {
         self.board.piece(piece).count_ones() as i32
@@ -150,7 +137,6 @@ impl ChessState {
         #[cfg(not(feature = "datagen"))]
         {
             use consts::Piece;
-
             let mut mat = self.piece_count(Piece::KNIGHT) * _params.knight_value()
                 + self.piece_count(Piece::BISHOP) * _params.bishop_value()
                 + self.piece_count(Piece::ROOK) * _params.rook_value()
@@ -166,7 +152,27 @@ impl ChessState {
     }
 
     pub fn get_value_wdl(&self, value: &ValueNetwork, params: &MctsParams) -> f32 {
+        if crate::mcts::batch::IS_EVALUATOR.with(|flag| flag.get()) {
+            return 1.0 / (1.0 + (-(self.get_value(value, params) as f32) / 400.0).exp());
+        }
+        if let Some(evaluator) = crate::mcts::batch::BATCH_EVALUATOR.get() {
+            return evaluator.evaluate_value(self.clone(), params.clone(), value);
+        }
         1.0 / (1.0 + (-(self.get_value(value, params) as f32) / 400.0).exp())
+    }
+
+    pub fn get_policy_feats(&self, policy: &PolicyNetwork) -> Accumulator<i16, { POLICY_L1 / 2 }> {
+        policy.hl(&self.board)
+    }
+
+    pub fn get_policy(&self, mov: Move, hl: &Accumulator<i16, { POLICY_L1 / 2 }>, policy: &PolicyNetwork) -> f32 {
+        if crate::mcts::batch::IS_EVALUATOR.with(|flag| flag.get()) {
+            return policy.get(&self.board, &mov, hl);
+        }
+        if let Some(evaluator) = crate::mcts::batch::BATCH_EVALUATOR.get() {
+            return evaluator.evaluate_policy(self.clone(), mov, hl.clone(), policy);
+        }
+        policy.get(&self.board, &mov, hl)
     }
 
     pub fn perft(&self, depth: usize) -> u64 {

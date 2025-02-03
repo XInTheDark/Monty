@@ -1,3 +1,4 @@
+pub(crate) mod batch;
 mod helpers;
 mod iteration;
 mod params;
@@ -35,11 +36,11 @@ pub struct SearchStats {
 }
 
 pub struct Searcher<'a> {
-    tree: &'a Tree,
-    params: &'a MctsParams,
-    policy: &'a PolicyNetwork,
-    value: &'a ValueNetwork,
-    abort: &'a AtomicBool,
+    pub tree: &'a Tree,
+    pub params: &'a MctsParams,
+    pub policy: &'a PolicyNetwork,
+    pub value: &'a ValueNetwork,
+    pub abort: &'a AtomicBool,
 }
 
 impl<'a> Searcher<'a> {
@@ -123,12 +124,10 @@ impl<'a> Searcher<'a> {
                 search_stats.main_iters.fetch_add(1, Ordering::Relaxed);
             }
 
-            // proven checkmate
             if self.tree[self.tree.root_node()].is_terminal() {
                 return true;
             }
 
-            // stop signal sent
             if self.abort.load(Ordering::Relaxed) {
                 return true;
             }
@@ -173,7 +172,7 @@ impl<'a> Searcher<'a> {
 
         if iters % 4096 == 0 {
             if let Some(time) = limits.opt_time {
-                let (should_stop, score) = SearchHelpers::soft_time_cutoff(
+                let (should_stop, score) = crate::mcts::helpers::SearchHelpers::soft_time_cutoff(
                     self,
                     timer,
                     *previous_score,
@@ -198,7 +197,6 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        // define "depth" as the average depth of selection
         let total_depth = search_stats.total_nodes.load(Ordering::Relaxed)
             - search_stats.total_iters.load(Ordering::Relaxed);
         let new_depth = total_depth / search_stats.total_iters.load(Ordering::Relaxed);
@@ -243,6 +241,17 @@ impl<'a> Searcher<'a> {
         uci_output: bool,
         update_nodes: &mut usize,
     ) -> (Move, f32) {
+        // If more than 4 threads are requested, limit tree–searching to 4 threads,
+        // and initialize the batch evaluator with the remaining threads.
+        let num_search_threads = if threads > 4 { 4 } else { threads };
+        if threads > 4 {
+            crate::mcts::batch::init_batch_evaluator(
+                threads - num_search_threads,
+                self.value,
+                self.policy,
+            );
+        }
+
         let timer = Instant::now();
         #[cfg(not(feature = "uci-minimal"))]
         let mut timer_last_output = Instant::now();
@@ -250,33 +259,23 @@ impl<'a> Searcher<'a> {
         let pos = self.tree.root_position();
         let node = self.tree.root_node();
 
-        // the root node is added to an empty tree, **and not counted** towards the
-        // total node count, in order for `go nodes 1` to give the expected result
         if self.tree.is_empty() {
             let ptr = self.tree.push_new_node().unwrap();
-
             assert_eq!(node, ptr);
-
             self.tree[ptr].clear();
             self.tree.expand_node(ptr, pos, self.params, self.policy, 1);
 
             let root_eval = pos.get_value_wdl(self.value, self.params);
             self.tree[ptr].update(1.0 - root_eval);
-        }
-        // relabel preexisting root policies with root PST value
-        else if self.tree[node].has_children() {
+        } else if self.tree[node].has_children() {
             self.tree
                 .relabel_policy(node, pos, self.params, self.policy, 1);
-
             let first_child_ptr = { *self.tree[node].actions() };
-
             for action in 0..self.tree[node].num_actions() {
                 let ptr = first_child_ptr + action;
-
                 if ptr.is_null() || !self.tree[ptr].has_children() {
                     continue;
                 }
-
                 let mut child = pos.clone();
                 child.make_move(self.tree[ptr].parent_move());
                 self.tree
@@ -290,7 +289,6 @@ impl<'a> Searcher<'a> {
         let mut best_move_changes = 0;
         let mut previous_score = f32::NEG_INFINITY;
 
-        // search loop
         while !self.abort.load(Ordering::Relaxed) {
             thread::scope(|s| {
                 s.spawn(|| {
@@ -308,7 +306,7 @@ impl<'a> Searcher<'a> {
                     );
                 });
 
-                for _ in 0..threads - 1 {
+                for _ in 0..num_search_threads - 1 {
                     s.spawn(|| self.playout_until_full_worker(&search_stats));
                 }
             });

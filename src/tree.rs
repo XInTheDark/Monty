@@ -459,9 +459,20 @@ impl Tree {
         draw: f32,
         visits: u64,
         best_move: Move,
+        best_child_visits: u64,
         ptr: NodePtr,
+        subtree_key: u64,
     ) {
-        self.hash.push(hash, wins, draw, visits, best_move, ptr);
+        self.hash.push(
+            hash,
+            wins,
+            draw,
+            visits,
+            best_move,
+            best_child_visits,
+            ptr,
+            subtree_key,
+        );
     }
 
     pub fn hash_generation(&self) -> u16 {
@@ -472,10 +483,10 @@ impl Tree {
         self.hash.advance_generation()
     }
 
-    pub fn probe_subtree_by_hash(&self, hash: u64) -> Option<NodePtr> {
+    pub fn probe_subtree_by_hash(&self, hash: u64, subtree_key: u64) -> Option<NodePtr> {
         self.hash
             .get(hash)
-            .and_then(|entry| entry.subtree_ptr(self.hash.structure_epoch()))
+            .and_then(|entry| entry.subtree_ptr(self.hash.structure_epoch(), subtree_key))
             .filter(|ptr| self[*ptr].visits() > 0 || self[*ptr].has_children())
     }
 
@@ -550,7 +561,10 @@ impl Tree {
         let stm = pos.stm();
         let tt_best_move = self.probe_hash(pos.hash()).and_then(|entry| {
             let best_move = entry.best_move();
-            (best_move != Move::NULL && entry.age(self.hash_generation()) <= 2).then_some(best_move)
+            (best_move != Move::NULL
+                && entry.best_child_visits() > 0
+                && entry.age(self.hash_generation()) <= 2)
+                .then_some(best_move)
         });
 
         pos.map_moves_with_policies(policy, |mov, policy| {
@@ -708,7 +722,7 @@ impl Tree {
         println!("info string searching for subtree");
 
         let root = self
-            .probe_subtree_by_hash(new_root.hash())
+            .probe_subtree_by_hash(new_root.hash(), new_root.state_hash())
             .inspect(|_| println!("info string found subtree via transposition table"))
             .unwrap_or_else(|| self.recurse_find(self.root_node(), &old_root, new_root, 2));
 

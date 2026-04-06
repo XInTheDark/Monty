@@ -1,9 +1,11 @@
 use crate::{
-    chess::{ChessState, GameState},
+    chess::{ChessState, GameState, Move},
     tree::{Node, NodePtr},
 };
 
 use super::{SearchHelpers, Searcher};
+
+const TT_SEED_VISITS_CAP: u64 = 64;
 
 pub fn perform_one(
     searcher: &Searcher,
@@ -16,10 +18,9 @@ pub fn perform_one(
     *depth += 1;
 
     let cur_hash = pos.hash();
-    let mut child_hash: Option<u64> = None;
-    let mut child_visits = 0;
     let tree = searcher.tree;
     let node = &tree[ptr];
+    let mut best_move = Move::NULL;
 
     let mut value = if node.is_terminal() || node.visits() == 0 {
         if node.visits() == 0 {
@@ -29,6 +30,8 @@ pub fn perform_one(
         // probe hash table to use in place of network
         if node.state() == GameState::Ongoing {
             if let Some(entry) = tree.probe_hash(cur_hash) {
+                best_move = entry.best_move();
+                tree.seed_node_from_hash(ptr, entry, TT_SEED_VISITS_CAP);
                 (entry.q(), entry.d())
             } else {
                 get_utility(searcher, ptr, pos)
@@ -63,13 +66,9 @@ pub fn perform_one(
         }
 
         let mov = tree[child_ptr].parent_move();
+        best_move = mov;
 
         pos.make_move(mov);
-
-        // capture child hash (value is stored from the side to move at this child)
-        child_hash = Some(pos.hash());
-
-        child_visits = tree[child_ptr].visits();
         tree[child_ptr].inc_threads();
 
         // acquire lock to avoid issues with desynced setting of
@@ -98,13 +97,28 @@ pub fn perform_one(
         u
     };
 
-    // store value for the side to move at the visited node in TT
-    if let Some(h) = child_hash {
-        // `u` here is from the current node's perspective, so flip for the child
-        tree.push_hash(h, 1.0 - value.0, value.1, child_visits);
+    let node_visits_before = node.visits();
+    let node_draw_before = node.draw();
+    let node_parent_q_before = node.q();
+    let updated_visits = node_visits_before.saturating_add(1);
+    let sample_parent_q = 1.0 - value.0;
+    let updated_parent_q = if node_visits_before == 0 {
+        sample_parent_q
     } else {
-        tree.push_hash(cur_hash, value.0, value.1, 1);
-    }
+        (node_parent_q_before * node_visits_before as f32 + sample_parent_q) / updated_visits as f32
+    };
+    let updated_draw =
+        (node_draw_before * node_visits_before as f32 + value.1) / updated_visits.max(1) as f32;
+
+    // store an aggregated side-to-move value for the visited node in TT
+    tree.push_hash(
+        cur_hash,
+        1.0 - updated_parent_q,
+        updated_draw,
+        updated_visits,
+        best_move,
+        ptr,
+    );
 
     // flip perspective and backpropagate
     value.0 = 1.0 - value.0;

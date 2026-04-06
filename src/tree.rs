@@ -415,6 +415,7 @@ impl Tree {
             self.copy_node_across(old_root_ptr, new_root_ptr, true);
         }
 
+        self.hash.advance_structure_epoch();
         self.reset_root_accumulator();
     }
 
@@ -451,8 +452,44 @@ impl Tree {
         self.hash.get(hash)
     }
 
-    pub fn push_hash(&self, hash: u64, wins: f32, draw: f32, visits: u64) {
-        self.hash.push(hash, wins, draw, visits);
+    pub fn push_hash(
+        &self,
+        hash: u64,
+        wins: f32,
+        draw: f32,
+        visits: u64,
+        best_move: Move,
+        ptr: NodePtr,
+    ) {
+        self.hash.push(hash, wins, draw, visits, best_move, ptr);
+    }
+
+    pub fn hash_generation(&self) -> u16 {
+        self.hash.generation()
+    }
+
+    pub fn advance_hash_generation(&self) -> u16 {
+        self.hash.advance_generation()
+    }
+
+    pub fn probe_subtree_by_hash(&self, hash: u64) -> Option<NodePtr> {
+        self.hash
+            .get(hash)
+            .and_then(|entry| entry.subtree_ptr(self.hash.structure_epoch()))
+            .filter(|ptr| self[*ptr].visits() > 0 || self[*ptr].has_children())
+    }
+
+    pub fn seed_node_from_hash(&self, ptr: NodePtr, entry: HashEntry, visits_cap: u64) {
+        let visits = entry.visits().min(visits_cap);
+        if visits <= 1 || self[ptr].visits() > 0 {
+            return;
+        }
+
+        self[ptr].apply_delta(NodeStatsDelta::from_average(
+            1.0 - entry.q(),
+            entry.d(),
+            visits,
+        ));
     }
 
     pub fn update_node_stats(&self, ptr: NodePtr, value: f32, draw: f32, thread_id: usize) {
@@ -472,6 +509,7 @@ impl Tree {
     fn clear_halves(&self) {
         self.tree[0].clear();
         self.tree[1].clear();
+        self.hash.advance_structure_epoch();
     }
 
     pub fn clear(&mut self, threads: usize) {
@@ -510,6 +548,10 @@ impl Tree {
         let mut moves = [const { MaybeUninit::uninit() }; 256];
         let mut count = 0;
         let stm = pos.stm();
+        let tt_best_move = self.probe_hash(pos.hash()).and_then(|entry| {
+            let best_move = entry.best_move();
+            (best_move != Move::NULL && entry.age(self.hash_generation()) <= 2).then_some(best_move)
+        });
 
         pos.map_moves_with_policies(policy, |mov, policy| {
             let adjusted = policy + self.butterfly.policy_bonus(stm, mov, params);
@@ -533,6 +575,12 @@ impl Tree {
         }
 
         slice.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        if let Some(best_move) = tt_best_move {
+            if let Some(idx) = slice.iter().position(|(mov, _)| *mov == best_move) {
+                slice[..=idx].rotate_right(1);
+            }
+        }
 
         let mut sum_of_squares = 0.0;
 
@@ -651,6 +699,7 @@ impl Tree {
         self.reset_root_accumulator();
 
         if self.is_empty() {
+            self.advance_hash_generation();
             return;
         }
 
@@ -658,9 +707,12 @@ impl Tree {
 
         println!("info string searching for subtree");
 
-        let root = self.recurse_find(self.root_node(), &old_root, new_root, 2);
+        let root = self
+            .probe_subtree_by_hash(new_root.hash())
+            .inspect(|_| println!("info string found subtree via transposition table"))
+            .unwrap_or_else(|| self.recurse_find(self.root_node(), &old_root, new_root, 2));
 
-        if !root.is_null() && self[root].has_children() {
+        if !root.is_null() && (self[root].has_children() || self[root].visits() > 0) {
             found = true;
 
             if root != self.root_node() {
@@ -675,6 +727,8 @@ impl Tree {
             println!("info string no subtree found");
             self.clear_halves();
         }
+
+        self.advance_hash_generation();
     }
 
     fn recurse_find(

@@ -66,14 +66,35 @@ pub struct NodeStatsDelta {
 }
 
 impl NodeStatsDelta {
+    fn quantize(value: f32) -> u64 {
+        (f64::from(value.clamp(0.0, 1.0)) * f64::from(QUANT)) as u64
+    }
+
     pub fn from_value(q: f32, draw: f32) -> Self {
-        let q = (f64::from(q) * f64::from(QUANT)) as u64;
-        let draws = (f64::from(draw) * f64::from(QUANT)) as u64;
+        let q = Self::quantize(q);
+        let draws = Self::quantize(draw);
         Self {
             visits: 1,
             sum_q: q,
             sum_sq_q: q * q,
             draws,
+        }
+    }
+
+    pub fn from_average(q: f32, draw: f32, visits: u64) -> Self {
+        if visits == 0 {
+            return Self::default();
+        }
+
+        let q = Self::quantize(q);
+        let draws = Self::quantize(draw);
+        let sum_sq_q = q.saturating_mul(q);
+
+        Self {
+            visits,
+            sum_q: q.saturating_mul(visits),
+            sum_sq_q: sum_sq_q.saturating_mul(visits),
+            draws: draws.saturating_mul(visits),
         }
     }
 

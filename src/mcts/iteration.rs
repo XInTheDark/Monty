@@ -5,7 +5,7 @@ use crate::{
 
 use super::{SearchHelpers, Searcher};
 
-const TT_SEED_VISITS_CAP: u64 = 64;
+const TT_SEED_VISITS_CAP: u64 = 1; // disable
 
 pub fn perform_one(
     searcher: &Searcher,

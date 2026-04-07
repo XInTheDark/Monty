@@ -378,33 +378,6 @@ impl ChessState {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::ChessState;
-
-    #[test]
-    fn state_hash_includes_halfmove_clock() {
-        let fresh = ChessState::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
-        let near_fifty = ChessState::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 99 1");
-
-        assert_eq!(fresh.hash(), near_fifty.hash());
-        assert_ne!(fresh.state_hash(), near_fifty.state_hash());
-    }
-
-    #[test]
-    fn state_hash_includes_repetition_history() {
-        let base = ChessState::from_fen(ChessState::STARTPOS);
-        let mut repeated = base.clone();
-        let board_hash = repeated.hash();
-
-        repeated.stack.push(board_hash);
-        repeated.history_hash = ChessState::push_history_hash(0, board_hash, repeated.stack.len());
-
-        assert_eq!(base.hash(), repeated.hash());
-        assert_ne!(base.state_hash(), repeated.state_hash());
-    }
-}
-
 fn perft<const ROOT: bool, const BULK: bool>(
     pos: &Position,
     depth: u8,

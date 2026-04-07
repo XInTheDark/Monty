@@ -11,6 +11,8 @@ use std::{
     time::Instant,
 };
 
+const LOW_TIME_REUSE_THRESHOLD_MS: u128 = 100;
+
 pub fn run(policy: &PolicyNetwork, value: &ValueNetwork, tcec_mode: bool) {
     let mut pos = ChessState::default();
     let mut root_game_ply = 0;
@@ -241,9 +243,20 @@ pub fn bench(depth: usize, policy: &PolicyNetwork, value: &ValueNetwork, params:
         let searcher = Searcher::new(&tree, params, policy, value, &abort);
         let timer = Instant::now();
         #[cfg(not(feature = "datagen"))]
-        searcher.search(1, limits, false, 1, false, &mut total_nodes);
+        searcher.search(1, limits, timer, false, false, 1, false, &mut total_nodes);
         #[cfg(feature = "datagen")]
-        searcher.search(1, limits, false, 1, false, &mut total_nodes, false, 1.0);
+        searcher.search(
+            1,
+            limits,
+            timer,
+            false,
+            false,
+            1,
+            false,
+            &mut total_nodes,
+            false,
+            1.0,
+        );
         time += timer.elapsed().as_secs_f32();
         tree.clear(1);
     }
@@ -558,13 +571,23 @@ fn go(
         max_time = Some(max_time.unwrap_or(u128::MAX).min(max));
     }
 
+    let effective_time_budget = match (opt_time, max_time) {
+        (Some(opt), Some(max)) => Some(opt.min(max)),
+        (Some(opt), None) => Some(opt),
+        (None, Some(max)) => Some(max),
+        (None, None) => None,
+    };
+    let low_time_mode =
+        effective_time_budget.is_some_and(|time| time <= LOW_TIME_REUSE_THRESHOLD_MS);
+
     let abort = AtomicBool::new(false);
 
     if disable_tree_reuse {
         tree.clear(threads);
     }
 
-    tree.set_root_position(pos);
+    let timer = Instant::now();
+    tree.set_root_position_with_options(pos, !low_time_mode);
 
     let limits = Limits {
         max_time,
@@ -582,6 +605,8 @@ fn go(
                 .search(
                     threads,
                     limits,
+                    timer,
+                    low_time_mode,
                     true,
                     multipv,
                     gui_compatibility,

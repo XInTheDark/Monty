@@ -706,6 +706,14 @@ impl Tree {
     }
 
     pub fn set_root_position(&mut self, new_root: &ChessState) {
+        self.set_root_position_with_options(new_root, true);
+    }
+
+    pub fn set_root_position_with_options(
+        &mut self,
+        new_root: &ChessState,
+        allow_tt_subtree_reuse: bool,
+    ) {
         let old_root = self.root.clone();
         self.root = new_root.clone();
 
@@ -721,10 +729,13 @@ impl Tree {
 
         println!("info string searching for subtree");
 
-        let root = self
-            .probe_subtree_by_hash(new_root.hash(), new_root.state_hash())
-            .inspect(|_| println!("info string found subtree via transposition table"))
-            .unwrap_or_else(|| self.recurse_find(self.root_node(), &old_root, new_root, 2));
+        let root = if allow_tt_subtree_reuse {
+            self.probe_subtree_by_hash(new_root.hash(), new_root.state_hash())
+                .inspect(|_| println!("info string found subtree via transposition table"))
+        } else {
+            None
+        }
+        .unwrap_or_else(|| self.recurse_find(self.root_node(), &old_root, new_root, 2));
 
         if !root.is_null() && (self[root].has_children() || self[root].visits() > 0) {
             found = true;

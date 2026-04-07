@@ -150,6 +150,14 @@ impl<'a> Searcher<'a> {
         F: FnMut() -> bool,
     {
         loop {
+            if self.abort.load(Ordering::Relaxed) {
+                return true;
+            }
+
+            if main_thread && search_stats.main_iters() > 0 && stop() {
+                return true;
+            }
+
             let mut pos = self.tree.root_position().clone();
             let mut this_depth = 0;
             let mut root_child = None;
@@ -179,10 +187,6 @@ impl<'a> Searcher<'a> {
 
             // stop signal sent
             if self.abort.load(Ordering::Relaxed) {
-                return true;
-            }
-
-            if stop() {
                 return true;
             }
         }
@@ -323,6 +327,8 @@ impl<'a> Searcher<'a> {
         &self,
         threads: usize,
         limits: Limits,
+        timer: Instant,
+        low_time_mode: bool,
         uci_output: bool,
         multipv: usize,
         gui_compatibility: bool,
@@ -330,9 +336,8 @@ impl<'a> Searcher<'a> {
         #[cfg(feature = "datagen")] use_dirichlet_noise: bool,
         #[cfg(feature = "datagen")] temp: f32,
     ) -> SearchRet {
-        let timer = Instant::now();
         #[cfg(not(feature = "uci-minimal"))]
-        let mut timer_last_output = Instant::now();
+        let mut timer_last_output = timer;
 
         let pos = self.tree.root_position();
         let root_stm = pos.stm();
@@ -359,19 +364,21 @@ impl<'a> Searcher<'a> {
             self.tree
                 .relabel_policy(node, pos, self.params, self.policy, 1);
 
-            let first_child_ptr = self.tree[node].actions();
+            if !low_time_mode {
+                let first_child_ptr = self.tree[node].actions();
 
-            for action in 0..self.tree[node].num_actions() {
-                let ptr = first_child_ptr + action;
+                for action in 0..self.tree[node].num_actions() {
+                    let ptr = first_child_ptr + action;
 
-                if ptr.is_null() || !self.tree[ptr].has_children() {
-                    continue;
+                    if ptr.is_null() || !self.tree[ptr].has_children() {
+                        continue;
+                    }
+
+                    let mut child = pos.clone();
+                    child.make_move(self.tree[ptr].parent_move());
+                    self.tree
+                        .relabel_policy(ptr, &child, self.params, self.policy, 2);
                 }
-
-                let mut child = pos.clone();
-                child.make_move(self.tree[ptr].parent_move());
-                self.tree
-                    .relabel_policy(ptr, &child, self.params, self.policy, 2);
             }
         }
 
@@ -382,6 +389,25 @@ impl<'a> Searcher<'a> {
             let epsilon: f32 = if cfg!(feature = "policy") { 0.05 } else { 0.25 };
 
             self.tree.add_dirichlet_noise_to_node(node, alpha, epsilon);
+        }
+
+        if limits
+            .max_time
+            .is_some_and(|time| timer.elapsed().as_millis() >= time)
+        {
+            self.tree.flush_root_accumulator();
+            let (_, mov, q) = self.get_best_action(self.tree.root_node());
+
+            #[cfg(not(feature = "datagen"))]
+            {
+                return (mov, q);
+            }
+
+            #[cfg(feature = "datagen")]
+            {
+                let selected_mov = self.tree.get_best_child_temp(self.tree.root_node(), temp);
+                return (selected_mov, q, 0);
+            }
         }
 
         let search_stats = SearchStats::new(threads);

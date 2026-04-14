@@ -5,21 +5,16 @@ use std::{
 
 use crate::chess::Move;
 
-use super::NodePtr;
-
 const BUCKET_SIZE: usize = 4;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HashEntry {
     hash: u64,
-    subtree_key: u64,
-    node_ptr: u64,
     q: u32,
     d: u32,
     visits: u32,
     best_child_visits: u32,
     meta: u32,
-    structure_epoch: u32,
 }
 
 impl HashEntry {
@@ -50,56 +45,26 @@ impl HashEntry {
     pub fn best_child_visits(&self) -> u64 {
         self.best_child_visits.into()
     }
-
-    pub fn node_ptr(&self) -> NodePtr {
-        NodePtr::from_raw(self.node_ptr)
-    }
-
-    pub fn subtree_ptr(&self, structure_epoch: u32, subtree_key: u64) -> Option<NodePtr> {
-        let ptr = self.node_ptr();
-        if self.structure_epoch == structure_epoch
-            && self.subtree_key == subtree_key
-            && !ptr.is_null()
-        {
-            Some(ptr)
-        } else {
-            None
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.visits == 0
-    }
-
-    fn matches(&self, hash: u64) -> bool {
-        !self.is_empty() && self.hash == hash
-    }
 }
 
 struct HashEntryInternal {
     hash: AtomicU64,
-    subtree_key: AtomicU64,
-    node_ptr: AtomicU64,
     q: AtomicU32,
     d: AtomicU32,
     visits: AtomicU32,
     best_child_visits: AtomicU32,
     meta: AtomicU32,
-    structure_epoch: AtomicU32,
 }
 
 impl Default for HashEntryInternal {
     fn default() -> Self {
         Self {
             hash: AtomicU64::new(0),
-            subtree_key: AtomicU64::new(0),
-            node_ptr: AtomicU64::new(NodePtr::NULL.inner()),
             q: AtomicU32::new(0),
             d: AtomicU32::new(0),
             visits: AtomicU32::new(0),
             best_child_visits: AtomicU32::new(0),
             meta: AtomicU32::new(0),
-            structure_epoch: AtomicU32::new(0),
         }
     }
 }
@@ -108,44 +73,46 @@ impl Clone for HashEntryInternal {
     fn clone(&self) -> Self {
         Self {
             hash: AtomicU64::new(self.hash.load(Ordering::Relaxed)),
-            subtree_key: AtomicU64::new(self.subtree_key.load(Ordering::Relaxed)),
-            node_ptr: AtomicU64::new(self.node_ptr.load(Ordering::Relaxed)),
             q: AtomicU32::new(self.q.load(Ordering::Relaxed)),
             d: AtomicU32::new(self.d.load(Ordering::Relaxed)),
             visits: AtomicU32::new(self.visits.load(Ordering::Relaxed)),
             best_child_visits: AtomicU32::new(self.best_child_visits.load(Ordering::Relaxed)),
             meta: AtomicU32::new(self.meta.load(Ordering::Relaxed)),
-            structure_epoch: AtomicU32::new(self.structure_epoch.load(Ordering::Relaxed)),
         }
     }
 }
 
 impl HashEntryInternal {
+    fn hash(&self) -> u64 {
+        self.hash.load(Ordering::Relaxed)
+    }
+
+    fn visits(&self) -> u32 {
+        self.visits.load(Ordering::Relaxed)
+    }
+
+    fn meta(&self) -> u32 {
+        self.meta.load(Ordering::Relaxed)
+    }
+
     fn load(&self) -> HashEntry {
         HashEntry {
-            hash: self.hash.load(Ordering::Relaxed),
-            subtree_key: self.subtree_key.load(Ordering::Relaxed),
-            node_ptr: self.node_ptr.load(Ordering::Relaxed),
+            hash: self.hash(),
             q: self.q.load(Ordering::Relaxed),
             d: self.d.load(Ordering::Relaxed),
-            visits: self.visits.load(Ordering::Relaxed),
+            visits: self.visits(),
             best_child_visits: self.best_child_visits.load(Ordering::Relaxed),
-            meta: self.meta.load(Ordering::Relaxed),
-            structure_epoch: self.structure_epoch.load(Ordering::Relaxed),
+            meta: self.meta(),
         }
     }
 
     fn store(&self, entry: HashEntry) {
-        self.subtree_key.store(entry.subtree_key, Ordering::Relaxed);
-        self.node_ptr.store(entry.node_ptr, Ordering::Relaxed);
         self.q.store(entry.q, Ordering::Relaxed);
         self.d.store(entry.d, Ordering::Relaxed);
         self.visits.store(entry.visits, Ordering::Relaxed);
         self.best_child_visits
             .store(entry.best_child_visits, Ordering::Relaxed);
         self.meta.store(entry.meta, Ordering::Relaxed);
-        self.structure_epoch
-            .store(entry.structure_epoch, Ordering::Relaxed);
         self.hash.store(entry.hash, Ordering::Relaxed);
     }
 }
@@ -173,7 +140,6 @@ impl Clone for HashBucket {
 pub struct HashTable {
     table: Vec<HashBucket>,
     generation: AtomicU16,
-    structure_epoch: AtomicU32,
 }
 
 impl HashTable {
@@ -181,7 +147,6 @@ impl HashTable {
         let mut table = HashTable {
             table: Vec::new(),
             generation: AtomicU16::new(0),
-            structure_epoch: AtomicU32::new(1),
         };
 
         let buckets = size.max(1).div_ceil(BUCKET_SIZE);
@@ -203,7 +168,6 @@ impl HashTable {
         });
 
         self.generation.store(0, Ordering::Relaxed);
-        self.structure_epoch.store(1, Ordering::Relaxed);
     }
 
     pub fn generation(&self) -> u16 {
@@ -216,14 +180,6 @@ impl HashTable {
             .wrapping_add(1)
     }
 
-    pub fn structure_epoch(&self) -> u32 {
-        self.structure_epoch.load(Ordering::Relaxed)
-    }
-
-    pub fn advance_structure_epoch(&self) -> u32 {
-        self.structure_epoch.fetch_add(1, Ordering::Relaxed) + 1
-    }
-
     fn bucket(&self, hash: u64) -> &HashBucket {
         let idx = hash % (self.table.len() as u64);
         &self.table[idx as usize]
@@ -233,34 +189,39 @@ impl HashTable {
         (u32::from(generation) << 16) | u32::from(u16::from(best_move))
     }
 
-    fn replacement_score(entry: HashEntry, current_generation: u16) -> u64 {
-        let age = u64::from(entry.age(current_generation));
-        (age << 32) | u64::from(u32::MAX - entry.visits)
+    fn replacement_score(generation: u16, visits: u32, current_generation: u16) -> u64 {
+        let age = u64::from(current_generation.wrapping_sub(generation));
+        (age << 32) | u64::from(u32::MAX - visits)
     }
 
     pub fn get(&self, hash: u64) -> Option<HashEntry> {
-        let mut best: Option<HashEntry> = None;
+        let bucket = self.bucket(hash);
+        let mut best_idx = None;
+        let mut best_generation = 0u16;
+        let mut best_visits = 0u32;
 
-        for slot in &self.bucket(hash).entries {
-            let entry = slot.load();
+        for (idx, slot) in bucket.entries.iter().enumerate() {
+            let visits = slot.visits();
+            if visits == 0 {
+                break;
+            }
 
-            if !entry.matches(hash) {
+            if slot.hash() != hash {
                 continue;
             }
 
-            best = match best {
-                Some(current)
-                    if current.generation() > entry.generation()
-                        || (current.generation() == entry.generation()
-                            && current.visits > entry.visits) =>
-                {
-                    Some(current)
-                }
-                _ => Some(entry),
-            };
+            let generation = (slot.meta() >> 16) as u16;
+            if best_idx.is_none()
+                || best_generation < generation
+                || (best_generation == generation && best_visits < visits)
+            {
+                best_idx = Some(idx);
+                best_generation = generation;
+                best_visits = visits;
+            }
         }
 
-        best
+        best_idx.map(|idx| bucket.entries[idx].load())
     }
 
     pub fn push(
@@ -271,15 +232,12 @@ impl HashTable {
         visits: u64,
         best_move: Move,
         best_child_visits: u64,
-        node_ptr: NodePtr,
-        subtree_key: u64,
     ) {
         let q_u32 = (q.clamp(0.0, 1.0) * u32::MAX as f32) as u32;
         let d_u32 = (draw.clamp(0.0, 1.0) * u32::MAX as f32) as u32;
         let visits_u32 = visits.clamp(1, u32::MAX as u64) as u32;
         let best_child_visits_u32 = best_child_visits.min(u32::MAX as u64) as u32;
         let generation = self.generation();
-        let structure_epoch = self.structure_epoch();
         let bucket = self.bucket(hash);
 
         let mut target_idx = 0usize;
@@ -287,19 +245,18 @@ impl HashTable {
         let mut best_replace_score = u64::MIN;
 
         for (idx, slot) in bucket.entries.iter().enumerate() {
-            let entry = slot.load();
-
-            if entry.matches(hash) {
-                exact_match = Some((idx, entry));
-                break;
-            }
-
-            if entry.is_empty() {
+            let visits = slot.visits();
+            if visits == 0 {
                 target_idx = idx;
                 break;
             }
 
-            let score = Self::replacement_score(entry, generation);
+            if slot.hash() == hash {
+                exact_match = Some((idx, slot.load()));
+                break;
+            }
+
+            let score = Self::replacement_score((slot.meta() >> 16) as u16, visits, generation);
             if score >= best_replace_score {
                 best_replace_score = score;
                 target_idx = idx;
@@ -320,26 +277,9 @@ impl HashTable {
             } else {
                 (best_move, best_child_visits_u32)
             };
-            let chosen_node_ptr = if node_ptr.is_null() {
-                existing.node_ptr()
-            } else {
-                node_ptr
-            };
-            let chosen_subtree_key = if node_ptr.is_null() {
-                existing.subtree_key
-            } else {
-                subtree_key
-            };
-            let chosen_structure_epoch = if node_ptr.is_null() {
-                existing.structure_epoch
-            } else {
-                structure_epoch
-            };
 
             HashEntry {
                 hash,
-                subtree_key: chosen_subtree_key,
-                node_ptr: chosen_node_ptr.inner(),
                 q: if keep_existing_stats {
                     existing.q
                 } else {
@@ -353,23 +293,18 @@ impl HashTable {
                 visits: existing.visits.max(visits_u32),
                 best_child_visits: chosen_best_child_visits,
                 meta: Self::encode_meta(generation, chosen_best_move),
-                structure_epoch: chosen_structure_epoch,
             }
         } else {
             HashEntry {
                 hash,
-                subtree_key,
-                node_ptr: node_ptr.inner(),
                 q: q_u32,
                 d: d_u32,
                 visits: visits_u32,
                 best_child_visits: best_child_visits_u32,
                 meta: Self::encode_meta(generation, best_move),
-                structure_epoch,
             }
         };
 
         bucket.entries[target_idx].store(new_entry);
     }
 }
-

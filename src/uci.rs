@@ -587,7 +587,7 @@ fn go(
     }
 
     let timer = Instant::now();
-    tree.set_root_position_with_options(pos, !low_time_mode);
+    tree.set_root_position(pos);
 
     let limits = Limits {
         max_time,

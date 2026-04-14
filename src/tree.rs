@@ -415,7 +415,6 @@ impl Tree {
             self.copy_node_across(old_root_ptr, new_root_ptr, true);
         }
 
-        self.hash.advance_structure_epoch();
         self.reset_root_accumulator();
     }
 
@@ -460,8 +459,6 @@ impl Tree {
         visits: u64,
         best_move: Move,
         best_child_visits: u64,
-        ptr: NodePtr,
-        subtree_key: u64,
     ) {
         self.hash.push(
             hash,
@@ -470,8 +467,6 @@ impl Tree {
             visits,
             best_move,
             best_child_visits,
-            ptr,
-            subtree_key,
         );
     }
 
@@ -481,26 +476,6 @@ impl Tree {
 
     pub fn advance_hash_generation(&self) -> u16 {
         self.hash.advance_generation()
-    }
-
-    pub fn probe_subtree_by_hash(&self, hash: u64, subtree_key: u64) -> Option<NodePtr> {
-        self.hash
-            .get(hash)
-            .and_then(|entry| entry.subtree_ptr(self.hash.structure_epoch(), subtree_key))
-            .filter(|ptr| self[*ptr].visits() > 0 || self[*ptr].has_children())
-    }
-
-    pub fn seed_node_from_hash(&self, ptr: NodePtr, entry: HashEntry, visits_cap: u64) {
-        let visits = entry.visits().min(visits_cap);
-        if visits <= 1 || self[ptr].visits() > 0 {
-            return;
-        }
-
-        self[ptr].apply_delta(NodeStatsDelta::from_average(
-            1.0 - entry.q(),
-            entry.d(),
-            visits,
-        ));
     }
 
     pub fn update_node_stats(&self, ptr: NodePtr, value: f32, draw: f32, thread_id: usize) {
@@ -520,7 +495,6 @@ impl Tree {
     fn clear_halves(&self) {
         self.tree[0].clear();
         self.tree[1].clear();
-        self.hash.advance_structure_epoch();
     }
 
     pub fn clear(&mut self, threads: usize) {
@@ -706,14 +680,6 @@ impl Tree {
     }
 
     pub fn set_root_position(&mut self, new_root: &ChessState) {
-        self.set_root_position_with_options(new_root, true);
-    }
-
-    pub fn set_root_position_with_options(
-        &mut self,
-        new_root: &ChessState,
-        allow_tt_subtree_reuse: bool,
-    ) {
         let old_root = self.root.clone();
         self.root = new_root.clone();
 
@@ -729,15 +695,9 @@ impl Tree {
 
         println!("info string searching for subtree");
 
-        let root = if allow_tt_subtree_reuse {
-            self.probe_subtree_by_hash(new_root.hash(), new_root.state_hash())
-                .inspect(|_| println!("info string found subtree via transposition table"))
-        } else {
-            None
-        }
-        .unwrap_or_else(|| self.recurse_find(self.root_node(), &old_root, new_root, 2));
+        let root = self.recurse_find(self.root_node(), &old_root, new_root, 2);
 
-        if !root.is_null() && (self[root].has_children() || self[root].visits() > 0) {
+        if !root.is_null() && self[root].has_children() {
             found = true;
 
             if root != self.root_node() {

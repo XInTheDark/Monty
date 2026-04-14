@@ -5,8 +5,6 @@ use crate::{
 
 use super::{SearchHelpers, Searcher};
 
-const TT_SEED_VISITS_CAP: u64 = 1; // disable
-
 pub fn perform_one(
     searcher: &Searcher,
     pos: &mut ChessState,
@@ -18,12 +16,10 @@ pub fn perform_one(
     *depth += 1;
 
     let cur_hash = pos.hash();
-    let subtree_key = pos.state_hash();
     let tree = searcher.tree;
     let node = &tree[ptr];
-    let tt_entry = tree.probe_hash(cur_hash);
     let mut best_move = Move::NULL;
-    let mut best_child_visits = tt_entry.map_or(0, |entry| entry.best_child_visits());
+    let mut best_child_visits = 0;
 
     let mut value = if node.is_terminal() || node.visits() == 0 {
         if node.visits() == 0 {
@@ -32,9 +28,7 @@ pub fn perform_one(
 
         // probe hash table to use in place of network
         if node.state() == GameState::Ongoing {
-            if let Some(entry) = tt_entry {
-                best_move = entry.best_move();
-                tree.seed_node_from_hash(ptr, entry, TT_SEED_VISITS_CAP);
+            if let Some(entry) = tree.probe_hash(cur_hash) {
                 (entry.q(), entry.d())
             } else {
                 get_utility(searcher, ptr, pos)
@@ -126,8 +120,6 @@ pub fn perform_one(
         updated_visits,
         best_move,
         best_child_visits,
-        ptr,
-        subtree_key,
     );
 
     // flip perspective and backpropagate

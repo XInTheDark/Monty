@@ -112,7 +112,6 @@ pub struct ChessState {
     board: Position,
     castling: Castling,
     stack: Vec<u64>,
-    history_hash: u64,
 }
 
 impl Default for ChessState {
@@ -128,36 +127,6 @@ impl ChessState {
 
     #[cfg(not(feature = "datagen"))]
     pub const BENCH_DEPTH: usize = 6;
-
-    const HISTORY_HASH_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
-
-    #[inline]
-    fn mix_hash(mut value: u64) -> u64 {
-        value ^= value >> 30;
-        value = value.wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        value ^= value >> 27;
-        value = value.wrapping_mul(0x94D0_49BB_1331_11EB);
-        value ^ (value >> 31)
-    }
-
-    #[inline]
-    fn push_history_hash(history_hash: u64, board_hash: u64, stack_len: usize) -> u64 {
-        let stack_len = u64::try_from(stack_len).unwrap_or(u64::MAX);
-        Self::mix_hash(
-            history_hash.rotate_left(7)
-                ^ board_hash
-                ^ stack_len.wrapping_mul(Self::HISTORY_HASH_SEED),
-        )
-    }
-
-    #[inline]
-    fn finalize_state_hash(board_hash: u64, history_hash: u64, halfm: u8) -> u64 {
-        Self::mix_hash(
-            board_hash
-                ^ history_hash.rotate_left(17)
-                ^ u64::from(halfm).wrapping_mul(Self::HISTORY_HASH_SEED.rotate_left(9)),
-        )
-    }
 
     pub fn board(&self) -> Position {
         self.board
@@ -179,7 +148,6 @@ impl ChessState {
             board,
             castling,
             stack: Vec::new(),
-            history_hash: 0,
         }
     }
 
@@ -195,20 +163,12 @@ impl ChessState {
         self.board.hash()
     }
 
-    pub fn state_hash(&self) -> u64 {
-        Self::finalize_state_hash(self.hash(), self.history_hash, self.board.halfm())
-    }
-
     pub fn make_move(&mut self, mov: Move) {
-        let board_hash = self.board.hash();
-        self.stack.push(board_hash);
-        self.history_hash =
-            Self::push_history_hash(self.history_hash, board_hash, self.stack.len());
+        self.stack.push(self.board.hash());
         self.board.make(mov, &self.castling);
 
         if self.board.halfm() == 0 {
             self.stack.clear();
-            self.history_hash = 0;
         }
     }
 

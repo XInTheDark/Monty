@@ -81,23 +81,6 @@ impl NodeStatsDelta {
         }
     }
 
-    pub fn from_average(q: f32, draw: f32, visits: u64) -> Self {
-        if visits == 0 {
-            return Self::default();
-        }
-
-        let q = Self::quantize(q);
-        let draws = Self::quantize(draw);
-        let sum_sq_q = q.saturating_mul(q);
-
-        Self {
-            visits,
-            sum_q: q.saturating_mul(visits),
-            sum_sq_q: sum_sq_q.saturating_mul(visits),
-            draws: draws.saturating_mul(visits),
-        }
-    }
-
     pub fn is_empty(&self) -> bool {
         self.visits == 0 && self.sum_q == 0 && self.sum_sq_q == 0 && self.draws == 0
     }

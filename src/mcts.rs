@@ -328,7 +328,6 @@ impl<'a> Searcher<'a> {
         threads: usize,
         limits: Limits,
         timer: Instant,
-        low_time_mode: bool,
         uci_output: bool,
         multipv: usize,
         gui_compatibility: bool,
@@ -364,21 +363,19 @@ impl<'a> Searcher<'a> {
             self.tree
                 .relabel_policy(node, pos, self.params, self.policy, 1);
 
-            if !low_time_mode {
-                let first_child_ptr = self.tree[node].actions();
+            let first_child_ptr = self.tree[node].actions();
 
-                for action in 0..self.tree[node].num_actions() {
-                    let ptr = first_child_ptr + action;
+            for action in 0..self.tree[node].num_actions() {
+                let ptr = first_child_ptr + action;
 
-                    if ptr.is_null() || !self.tree[ptr].has_children() {
-                        continue;
-                    }
-
-                    let mut child = pos.clone();
-                    child.make_move(self.tree[ptr].parent_move());
-                    self.tree
-                        .relabel_policy(ptr, &child, self.params, self.policy, 2);
+                if ptr.is_null() || !self.tree[ptr].has_children() {
+                    continue;
                 }
+
+                let mut child = pos.clone();
+                child.make_move(self.tree[ptr].parent_move());
+                self.tree
+                    .relabel_policy(ptr, &child, self.params, self.policy, 2);
             }
         }
 
